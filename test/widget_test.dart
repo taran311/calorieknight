@@ -136,6 +136,32 @@ void main() {
     expect(keepLocal(played, 5, null, 0), isTrue);
   });
 
+  test('closing the day rests until midnight; logging food or the new date starts the next day', () {
+    final e = GameEngine(GameEngine.newGame(), random: Random(9));
+    logSampleDay(e);
+    final eaten = e.state.logs.length, day = e.state.day;
+    e.rest();
+    expect(e.state.resting, isTrue);
+    expect(e.state.shownDay, day);
+    expect(e.state.shownLogs.length, eaten);
+    expect(e.state.logs.isEmpty, isTrue);
+    // The save keeps the rest.
+    final back = GameState.fromJson(jsonDecode(jsonEncode(e.state.toJson())) as Map<String, dynamic>);
+    expect(back.resting, isTrue);
+    expect(back.shownLogs.length, eaten);
+    // Midnight: the new day shows.
+    e.closeStaleDay(DateTime.now().add(const Duration(days: 1)));
+    expect(e.state.restingDate == null, isTrue);
+    expect(e.state.shownDay, day + 1);
+    // Or food logged while resting starts it early.
+    logSampleDay(e);
+    e.rest();
+    expect(e.state.resting, isTrue);
+    e.logFood(LoggedFood('Apple', 80, 20, 0, 0, null));
+    expect(e.state.resting, isFalse);
+    expect(e.state.shownLogs.length, 1);
+  });
+
   test('a day left open past midnight closes by itself, and an empty day never does', () {
     final e = GameEngine(GameEngine.newGame(), random: Random(3));
     final now = DateTime.now();

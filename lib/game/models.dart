@@ -479,6 +479,8 @@ class GameState {
     this.aidDay = -1,
     this.nightDay = -1,
     this.dayDate,
+    this.restingDate,
+    List<LoggedFood>? restedLogs,
     List<String>? cardTaken,
     this.nightDoneDay = -1,
     Map<String, int>? deedCounts,
@@ -522,6 +524,7 @@ class GameState {
        settings = settings ?? Settings(),
        knight = knight ?? Knight(),
        logs = logs ?? [],
+       restedLogs = restedLogs ?? [],
        starvingDays = starvingDays ?? [],
        journal = journal ?? [],
        pendingLoot = pendingLoot ?? [],
@@ -567,6 +570,22 @@ class GameState {
   /// The calendar date ('2026-10-24') the current day's first food was logged. A day still open on
   /// a later date closes by itself when the game next opens.
   String? dayDate;
+
+  /// Resting at the Inn: the calendar date the day was closed on, and that day's food. Until that
+  /// date is over, camp still shows the closed day (its food and stamina); the next day begins at
+  /// midnight, or sooner if food is logged.
+  String? restingDate;
+  List<LoggedFood> restedLogs;
+
+  /// Whether the hero is resting after closing today's day (see [restingDate]).
+  bool restingOn(DateTime now) => restingDate != null && restingDate == _dateKey(now);
+  bool get resting => restingOn(DateTime.now());
+
+  /// The day and food camp shows: the closed day while resting, otherwise the current one.
+  int get shownDay => resting ? day - 1 : day;
+  List<LoggedFood> get shownLogs => resting ? restedLogs : logs;
+
+  static String _dateKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   /// Calorie Card food already struck with here (its entry ids), so nothing strikes twice.
   final List<String> cardTaken;
@@ -652,6 +671,8 @@ class GameState {
     if (aidDay >= 0) 'aid': aidDay,
     if (nightDay >= 0) 'night': nightDay,
     if (dayDate != null) 'dayDate': dayDate,
+    if (restingDate != null) 'resting': restingDate,
+    if (restedLogs.isNotEmpty) 'rested': restedLogs.map((l) => l.toJson()).toList(),
     if (nightDoneDay >= 0) 'nightDone': nightDoneDay,
     if (cardTaken.isNotEmpty) 'cardTaken': cardTaken,
     if (deedCounts.isNotEmpty) 'deedCounts': deedCounts,
@@ -719,6 +740,8 @@ class GameState {
       aidDay: (j['aid'] as num?)?.toInt() ?? -1,
       nightDay: (j['night'] as num?)?.toInt() ?? -1,
       dayDate: j['dayDate'] as String?,
+      restingDate: j['resting'] as String?,
+      restedLogs: list('rested', LoggedFood.fromJson),
       nightDoneDay: (j['nightDone'] as num?)?.toInt() ?? -1,
       cardTaken: [for (final x in (j['cardTaken'] as List?) ?? const []) '$x'],
       deedCounts: {for (final e in ((j['deedCounts'] as Map?) ?? {}).entries) e.key as String: (e.value as num).toInt()},

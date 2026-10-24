@@ -50,6 +50,7 @@ Future<void> openBattle(BuildContext context, GameController c, void Function(Ga
 /// already chosen.
 Future<void> strike(BuildContext context, GameController c, {String initialText = '', String? meal, List<FoodItem> items = const []}) async {
   if (c.locked) return;
+  if (!await ensureAwake(context, c) || !context.mounted) return;
   final r = await showRationsPage(context, c, initialText: initialText, meal: meal, items: items);
   if (r == null || !context.mounted) return;
   await strikeWith(context, c, r);
@@ -57,6 +58,7 @@ Future<void> strike(BuildContext context, GameController c, {String initialText 
 
 /// Logs chosen rations: a strike on the battle screen, or a quiet correction after a removal.
 Future<void> strikeWith(BuildContext context, GameController c, RationsResult r) async {
+  if (!await ensureAwake(context, c) || !context.mounted) return;
   unawaited(c.foodBook.remember(r.items.where((i) => i.cardId == null), r.meal));
   // Food brought over from The Calorie Card keeps its meal there, and can't strike twice.
   final foods = [for (final i in r.items) i.toLogged(i.cardId != null ? (i.meal ?? r.meal) : r.meal)];
@@ -72,6 +74,32 @@ Future<void> strikeWith(BuildContext context, GameController c, RationsResult r)
   }
   // Every food is its own strike; they play back to back as one combo.
   await openBattle(context, c, (c) => c.logCombo(foods));
+}
+
+/// Resting after closing the day: logging food starts the next day early, so ask first. True to go
+/// ahead (not resting, or the player chose to start the next day).
+Future<bool> ensureAwake(BuildContext context, GameController c) async {
+  final s = c.state;
+  if (!s.resting) return true;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Palette.parch,
+      title: Text('Start day ${s.day} now?', style: Txt.inkLabel(size: 19)),
+      content: Text(
+        'Day ${s.shownDay} is closed and your hero is resting at the Inn. Day ${s.day} begins at midnight. '
+        'Food you log now starts day ${s.day} early.',
+        style: Txt.body(size: 14.5),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text('Keep resting', style: Txt.label(size: 14, color: Palette.inkSoft))),
+        TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text('Start day ${s.day}', style: Txt.label(size: 14, color: Palette.blood))),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  c.wakeEarly();
+  return true;
 }
 
 /// The Recipes page; "Add to today" strikes straight away.
@@ -189,7 +217,7 @@ class _CampPageState extends State<CampPage> {
   Widget build(BuildContext context) {
     _maybeTour();
     _maybeOvernight();
-    final s = c.state, t = totals(s.logs), a = s.settings.allowance;
+    final s = c.state, t = totals(s.shownLogs), a = s.settings.allowance;
     final again = c.foodBook.rankForMeal(_meal, limit: 3);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 28),
@@ -276,7 +304,7 @@ class _CampPageState extends State<CampPage> {
                 children: [
                   _FooterLink(icon: Icons.history_edu, label: 'Battle log', onTap: () => _showBattleLog(context)),
                   _FooterLink(icon: Icons.help_outline, label: 'How it works', onTap: _tour),
-                  if (s.logs.isEmpty) _FooterLink(icon: Icons.play_circle_outline, label: 'Watch a sample day', onTap: c.locked ? null : () => openBattle(context, c, (c) => c.playSampleDay(), autoReturn: false)),
+                  if (s.logs.isEmpty && !s.resting) _FooterLink(icon: Icons.play_circle_outline, label: 'Watch a sample day', onTap: c.locked ? null : () => openBattle(context, c, (c) => c.playSampleDay(), autoReturn: false)),
                 ],
               ),
             ],
@@ -324,7 +352,7 @@ class HeroCardFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = controller.state, k = s.knight, t = totals(s.logs), set = s.settings;
+    final s = controller.state, k = s.knight, t = totals(s.shownLogs), set = s.settings;
     final dye = Color(dyeById(k.dye).argb);
     final grams = [
       ('PROTEIN', t.protein, set.allowance * set.protein / 400, proteinColour),
@@ -459,7 +487,7 @@ class HeroCardFace extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text('DAY ${s.day}', style: label(11, const Color(0xFFFFF4D8))),
+                              Text(s.resting ? 'DAY ${s.shownDay} · RESTING' : 'DAY ${s.day}', style: label(11, const Color(0xFFFFF4D8))),
                               Text('${fmt(k.coins)} GOLD', style: label(11, const Color(0xFFF2D27A))),
                             ],
                           ),
@@ -596,7 +624,7 @@ class StaminaBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = controller.state, spent = totals(s.logs).kcal, a = s.settings.allowance, pct = a <= 0 ? 0.0 : spent / a * 100;
+    final s = controller.state, spent = totals(s.shownLogs).kcal, a = s.settings.allowance, pct = a <= 0 ? 0.0 : spent / a * 100;
     const scale = 130.0;
     final inBand = pct >= 90 && pct <= 105;
     final fill = pct > 105 ? const Color(0xFFC9763E) : (inBand ? Palette.moss : const Color(0xFFC9963E));
@@ -796,7 +824,8 @@ class _MealSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logs = controller.state.logs;
+    // While resting, the closed day's food shows (read only: that day has been judged).
+    final resting = controller.state.resting, logs = controller.state.shownLogs;
     // Foods logged without a meal (older saves, the sample day) sit under Snacks.
     final rows = [
       for (final (i, l) in logs.indexed)
@@ -839,7 +868,7 @@ class _MealSection extends StatelessWidget {
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: controller.locked ? null : () => _confirmRemove(context, i, l.name),
+                onTap: controller.locked || resting ? null : () => _confirmRemove(context, i, l.name),
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
                   decoration: const BoxDecoration(border: Border(top: BorderSide(color: Palette.stone2))),
@@ -989,6 +1018,21 @@ class _AdventureInboxState extends State<AdventureInbox> {
           onAction: () => showDailyGift(context, c),
           dismissible: false,
           colour: const Color(0xFFF2C14E),
+        ),
+      if (s.resting)
+        _Note(
+          'resting',
+          icon: Icons.bedtime_outlined,
+          title: 'Resting at the Inn',
+          body: 'Day ${s.shownDay} is done. Day ${s.day} begins at midnight, or log food to start it early.',
+          action: 'Start day ${s.day}',
+          onAction: locked
+              ? null
+              : () async {
+                  if (await ensureAwake(context, c) && context.mounted) setState(() {});
+                },
+          dismissible: false,
+          colour: const Color(0xFFB8A0E8),
         ),
       if (_card.isNotEmpty)
         _Note(

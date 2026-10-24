@@ -682,6 +682,8 @@ class GameEngine {
   /// removed, the next log is a correction instead: added with no strike.
   SwingResult logMeal(List<LoggedFood> foods) {
     assert(foods.isNotEmpty);
+    // Food logged while resting starts the next day early.
+    if (state.restingDate != null) endRest();
     if (state.logs.isEmpty) state.dayDate = dateKey(DateTime.now());
     if (state.corrections > 0) {
       state.corrections--;
@@ -1453,6 +1455,7 @@ class GameEngine {
   /// at the Inn now, as if the hero had rested that night. Returns its result, or null if today's
   /// day is still going (or nothing was logged).
   DayResult? closeStaleDay(DateTime now) {
+    if (state.restingDate != null && !state.restingOn(now)) endRest(); // morning: the new day begins
     if (state.logs.isEmpty) {
       state.dayDate = null;
       return null;
@@ -1464,11 +1467,22 @@ class GameEngine {
     }
     if (started == today) return null;
     final when = DateTime.tryParse(started);
-    return rest(now: when == null ? now : DateTime(when.year, when.month, when.day, 22));
+    // Closed the morning after: no evening of rest to show, the new day starts now.
+    final r = rest(now: when == null ? now : DateTime(when.year, when.month, when.day, 22), sleep: false);
+    return r;
+  }
+
+  /// Stops resting: the next day (already counted) is the one camp shows.
+  void endRest() {
+    state.restingDate = null;
+    state.restedLogs = [];
   }
 
   /// Rest at the Inn: judge the day, apply it, and start the next.
-  DayResult rest({DateTime? now}) {
+  /// With [sleep], the hero rests for the rest of the evening: camp keeps showing the closed day
+  /// until midnight (or until food is logged). Without it (a day closed the next morning), the new
+  /// day shows straight away.
+  DayResult rest({DateTime? now, bool sleep = true}) {
     final k = state.knight, v = computeVerdict(state), r = DayResult(state.day, v);
     _note('Day ${state.day}: ${v.title}.', EntryKind.day);
     if (v.blow > 0) {
@@ -1568,6 +1582,12 @@ class GameEngine {
     state.day++;
     // A day logged and closed opens tonight's road.
     if (logged) state.nightDay = state.day;
+    if (sleep) {
+      state.restingDate = dateKey(now ?? DateTime.now());
+      state.restedLogs = List.of(state.logs);
+    } else {
+      endRest();
+    }
     state.logs = [];
     state.dayDate = null;
     state.strikes = 0;

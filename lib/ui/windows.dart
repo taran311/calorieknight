@@ -313,7 +313,9 @@ class _VerdictWindow extends StatelessWidget {
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
-              child: StoneButton(title: 'Wake for day $nextDay', tone: ButtonTone.amber, compact: true, onPressed: () => Navigator.of(context).pop()),
+              // Closed in the evening: rest until midnight (the next day can start early from camp).
+              // Closed the morning after: the new day is already here.
+              child: StoneButton(title: overnight ? 'Wake for day $nextDay' : 'Rest for the night', tone: ButtonTone.amber, compact: true, onPressed: () => Navigator.of(context).pop()),
             ),
           ],
         ),

@@ -76,7 +76,7 @@ class StatsHeader extends StatelessWidget {
                         children: [
                           const TextSpan(text: 'Day '),
                           TextSpan(
-                            text: '${s.day}',
+                            text: '${s.shownDay}',
                             style: Txt.label(size: 13, color: Palette.amber),
                           ),
                         ],

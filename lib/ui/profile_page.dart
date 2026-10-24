@@ -49,7 +49,7 @@ class ProfilePage extends StatelessWidget {
                     Text('@${friends.myHandle} · level ${k.level} ${k.heroClass.label.toLowerCase()}', style: Txt.onStone(size: 13.5)),
                     const SizedBox(height: 8),
                     row('Email', email),
-                    row('Day', '${s.day}'),
+                    row('Day', s.resting ? '${s.shownDay} (resting)' : '${s.day}'),
                     row('Foes felled', '${s.foesFelled}'),
                     row('Rare foes felled', '${s.raresFelled}'),
                     row('Treasure chests opened', '${s.chestsOpened}'),

@@ -153,14 +153,37 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Checks the calendar every minute while the app is open, so midnight ends a rest (and closes an
+  /// open day) without needing a reload.
+  Timer? _clock;
+
+  /// Starts the next day now instead of at midnight (the player chose to log food while resting).
+  void wakeEarly() {
+    if (state.restingDate == null) return;
+    engine.endRest();
+    _save();
+    notifyListeners();
+  }
+
   /// A day closed by itself (left open past midnight), waiting to be shown at camp.
   DayResult? overnight;
 
   /// Closes yesterday's day if it was left open (see [GameEngine.closeStaleDay]).
   void checkCalendar() {
+    _clock ??= Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!_disposed && loaded) checkCalendar();
+    });
     if (busy || locked) return;
+    final wasResting = state.restingDate != null;
     final r = engine.closeStaleDay(DateTime.now());
-    if (r == null) return;
+    if (r == null) {
+      if (wasResting && state.restingDate == null) {
+        // Morning: the rest is over and the new day shows.
+        _save();
+        notifyListeners();
+      }
+      return;
+    }
     overnight = r;
     lastSwing = null;
     _syncShown();
@@ -800,6 +823,7 @@ class GameController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _clock?.cancel();
     _events.close();
     super.dispose();
   }

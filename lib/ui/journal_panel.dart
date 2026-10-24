@@ -53,7 +53,7 @@ class _Rations extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = controller.state, t = totals(s.logs), a = s.settings.allowance, pct = t.kcal / a * 100;
+    final s = controller.state, t = totals(s.shownLogs), a = s.settings.allowance, pct = t.kcal / a * 100;
     const scale = 130.0;
     final fillColour = pct > 115 ? Palette.blood : (pct > 0 && pct < 75 ? const Color(0xFFB0822E) : Palette.moss);
     final sh = macroShares(t);

@@ -27,6 +27,18 @@ abstract class AuthService extends ChangeNotifier {
   Future<Account> signIn(String email, String password);
   Future<Account> signUp({required String knightName, required String email, required String password});
   Future<void> signOut();
+
+  /// Real accounts (Firebase) rather than the device-only mock.
+  bool get isReal => false;
+
+  /// Whether "Continue with Google" is offered.
+  bool get supportsGoogle => false;
+
+  /// Signs in with Google. Null if the player cancelled.
+  Future<Account?> signInWithGoogle() async => null;
+
+  /// Emails a password-reset link.
+  Future<void> sendPasswordReset(String email) async => throw AuthException("Password reset isn't available in the testing build.");
 }
 
 /// The demo account seeded on first launch, for testing before Firebase is connected.

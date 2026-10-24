@@ -151,7 +151,7 @@ class _ClassCard extends StatelessWidget {
         Text(heroClass.trait, textAlign: wide ? TextAlign.center : TextAlign.start, style: Txt.label(size: 13, color: const Color(0xFF9BE27A))),
         const SizedBox(height: 4),
         Text(
-          'Armour: ${tiersFor(heroClass).map((t) => t.name).join(' › ')}',
+          'Armour: ${tiersFor(heroClass).where((t) => !t.dropOnly).map((t) => t.name).join(' › ')}',
           textAlign: wide ? TextAlign.center : TextAlign.start,
           style: Txt.onStone(size: 12),
         ),

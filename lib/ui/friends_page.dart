@@ -299,7 +299,8 @@ class _PersonRow extends StatelessWidget {
                   children: [
                     ClassEmblem(card.heroClass, size: 14),
                     const SizedBox(width: 4),
-                    Flexible(child: Text(card.name, overflow: TextOverflow.ellipsis, style: Txt.label(size: 15))),
+                    Flexible(child: Text(card.name, overflow: TextOverflow.ellipsis, style: Txt.label(size: 15, color: card.supporter ? const Color(0xFFF2D27A) : Palette.cream))),
+                    if (card.supporter) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.star, size: 14, color: Color(0xFFF2D27A))),
                   ],
                 ),
                 Text(subtitle, style: Txt.onStone(size: 12.5)),
@@ -460,7 +461,7 @@ class _Hiscores extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(h.uid == 'me' ? '${h.name} (you)' : h.name, overflow: TextOverflow.ellipsis, style: Txt.label(size: 14.5)),
+                        Text(h.uid == 'me' ? '${h.name} (you)' : h.name, overflow: TextOverflow.ellipsis, style: Txt.label(size: 14.5, color: h.supporter ? const Color(0xFFF2D27A) : Palette.cream)),
                         Text('Level ${h.level} ${h.heroClass.label.toLowerCase()} · ${h.streak}-day streak', style: Txt.onStone(size: 12)),
                       ],
                     ),

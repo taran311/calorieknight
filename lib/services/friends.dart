@@ -36,7 +36,11 @@ class HeroCard {
     this.balancedWeek = 0,
     this.streak = 0,
     this.foesFelled = 0,
+    this.supporter = false,
   });
+
+  /// Wears the Supporter's crest (cosmetic).
+  final bool supporter;
 
   final String uid, name, handle, dye;
   final HeroClass heroClass;
@@ -58,6 +62,7 @@ class HeroCard {
     'week': balancedWeek,
     'streak': streak,
     'felled': foesFelled,
+    if (supporter) 'sup': true,
   };
 
   factory HeroCard.fromJson(Map<String, dynamic> j) {
@@ -74,6 +79,7 @@ class HeroCard {
       balancedWeek: (j['week'] as num?)?.toInt() ?? 0,
       streak: (j['streak'] as num?)?.toInt() ?? 0,
       foesFelled: (j['felled'] as num?)?.toInt() ?? 0,
+      supporter: j['sup'] == true,
     );
   }
 }
@@ -93,6 +99,7 @@ HeroCard heroCardFor(GameState s, {String uid = 'me', String handle = ''}) {
     balancedWeek: balancedThisWeek(s, DateTime.now()),
     streak: balancedStreak(s),
     foesFelled: s.foesFelled,
+    supporter: k.supporter,
   );
 }
 
@@ -200,6 +207,14 @@ abstract class FriendsService extends ChangeNotifier {
 
   /// Display name for a raid member id ('me' is you).
   String nameOf(String uid);
+
+  /// Joins from a friend's invite (their handle, or their invite link). Adds them as a friend and
+  /// tells them you joined, so you both earn the Twinbound Band. Returns an error, or null.
+  Future<String?> redeemInvite(String handleOrLink) => sendRequest(handleOrLink);
+
+  /// Friends who joined from your invite since the last call (each counts toward the friend
+  /// deeds). Live: read and cleared from `ck_referrals/{uid}`.
+  int takeReferrals() => 0;
 }
 
 /// Device-only friends for prototyping, seeded with fictional heroes.
@@ -249,11 +264,11 @@ class MockFriendsService extends FriendsService {
     final p = _people.firstWhere((x) => x.$1 == uid);
     final seed = uid.codeUnits.fold<int>(7, (a, b) => a * 31 + b) & 0x7fffffff;
     final rng = math.Random(seed), table = LootTable(rng), c = p.$4;
-    final tiers = tiersFor(c);
+    final tiers = tiersFor(c).where((t) => !t.dropOnly).toList();
     final loadout = Loadout(armour: tiers[math.min(tiers.length - 1, p.$5 ~/ 3)].id, weapon: starterWeapon(c));
     for (var i = 0; i < 6; i++) {
       final g = table.roll(c, p.$5, boss: i == 0);
-      if (g.slot == GearSlot.trinket) continue;
+      if (g.slot == GearSlot.trinket || g.slot == GearSlot.ring) continue;
       final cur = loadout.inSlot(g.slot);
       if (cur == null || g.score > cur.score) loadout.put(g);
     }

@@ -1,19 +1,48 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+
+import 'firebase_options.dart';
 
 import 'game/controller.dart';
 import 'services/auth.dart';
+import 'services/firebase_auth_service.dart';
+import 'services/food_book.dart';
+import 'services/food_country.dart';
 import 'services/friends.dart';
+import 'services/proxy_client.dart';
 import 'services/storage.dart';
+import 'services/world_boss_service.dart';
 import 'ui/auth_screens.dart';
 import 'ui/class_picker.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Swap MockAuthService for a Firebase-backed AuthService once the CalorieKnight project exists.
-  final auth = MockAuthService()..restore();
+  FoodCountry.device = WidgetsBinding.instance.platformDispatcher.locale.countryCode;
+  final auth = await _startAuth();
+  unawaited(auth.restore());
   runApp(CalorieKnightApp(auth: auth));
+}
+
+/// Real Firebase sign-in where it's configured (the web app today), so the food proxy accepts
+/// lookups; otherwise the device-only test sign-in.
+Future<AuthService> _startAuth() async {
+  final options = DefaultFirebaseOptions.currentPlatform;
+  if (options == null) return MockAuthService();
+  try {
+    await Firebase.initializeApp(options: options);
+  } on FirebaseException catch (e) {
+    // Already started from google-services.json on Android: harmless.
+    if (e.code != 'duplicate-app') return MockAuthService();
+  } catch (_) {
+    return MockAuthService();
+  }
+  final auth = FirebaseAuthService();
+  ProxyClient.tokenProvider = auth.idToken;
+  return auth;
 }
 
 class CalorieKnightApp extends StatelessWidget {
@@ -40,6 +69,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   GameController? _game;
   FriendsService? _friends;
+  WorldBossService? _world;
   String? _gameFor;
 
   @override
@@ -52,8 +82,10 @@ class _AuthGateState extends State<AuthGate> {
   void _drop() {
     _game?.dispose();
     _friends?.dispose();
+    _world?.dispose();
     _game = null;
     _friends = null;
+    _world = null;
     _gameFor = null;
   }
 
@@ -65,7 +97,11 @@ class _AuthGateState extends State<AuthGate> {
       // Swap MockFriendsService for a Firestore-backed one with the server.
       final friends = MockFriendsService(accountId: a.id, heroName: a.knightName);
       _friends = friends;
-      _game = GameController(storage: GameStorage(accountId: a.id), friends: friends);
+      final practice = PracticeWorldBossService(accountId: a.id);
+      final world = widget.auth.isReal ? LiveWorldBossService(uid: a.id, fallback: practice) : practice;
+      _world = world;
+      _game = GameController(storage: GameStorage(accountId: a.id), foodBook: FoodBook(accountId: a.id), friends: friends, world: world);
+      unawaited(world.load());
       _game!.load().then((_) async {
         _nameNewKnight(a);
         await friends.load();

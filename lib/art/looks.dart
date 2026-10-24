@@ -9,7 +9,7 @@ import '../game/loot.dart';
 import '../game/models.dart';
 import 'paint_kit.dart';
 
-enum Stance { knight, mage, ranger, goblin, rogue, zombie, pillager, rose }
+enum Stance { knight, mage, ranger, goblin, rogue, zombie, pillager, rose, ent }
 
 enum HeadKind {
   coif,
@@ -25,13 +25,29 @@ enum HeadKind {
   rangermask,
   goblin,
   goblinChief,
+  ork,
+  orkShaman,
+  orkWarlord,
+  skull,
+  skullHood,
+  skullHelm,
+  skullHorned,
   hood,
   zombie,
   pillager,
   pillagerCap,
+  ent,
+  cyclops,
+  gargoyle,
+  demon,
+  bull,
+  ghoul,
+  banshee,
+  witch,
+  magemask,
 }
 
-enum TorsoKind { plain, leather, studded, mail, plate, robe, fur, rags }
+enum TorsoKind { plain, leather, studded, scales, mail, plate, robe, fur, rags, ribs, bark, stone }
 
 enum Weapon {
   none,
@@ -54,13 +70,47 @@ enum Weapon {
   longbow,
   crossbow,
   tome,
-  orb;
+  orb,
+  dragondagger,
+  dragonstaff,
+  orkclub,
+  orkbow,
+  orkstaff,
+  halberd,
+  spear,
+  scimitar,
+  chakram,
+  throwingknives,
+  handcannon,
+  cannon,
+  handcrossbow,
+  heartmaul,
+  heartbow,
+  livingstaff,
+  runeblade,
+  runebow,
+  runestaff,
+  trident,
+  hook,
+  fishingrod;
+
+  /// The shape a rune-engraved weapon is built on (its runes are drawn over it).
+  Weapon get shape => switch (this) {
+    runeblade => longsword,
+    runebow => longbow,
+    runestaff => staff,
+    _ => this,
+  };
 
   static Weapon fromArt(String? art) => Weapon.values.firstWhere((w) => w.name == art, orElse: () => Weapon.none);
 
-  bool get isBow => this == bow || this == longbow || this == crossbow;
-  bool get isStaff => this == staff || this == crystalstaff;
-  bool get twoHanded => this == greatsword || this == greataxe || isStaff || isBow;
+  bool get isBow => this == bow || this == longbow || this == crossbow || this == orkbow || this == heartbow || this == runebow;
+  bool get isStaff => this == staff || this == crystalstaff || this == dragonstaff || this == orkstaff || this == livingstaff || this == runestaff;
+  /// Thrown or fired weapons (not bows): they still use the ranger's aim-and-loose animation.
+  bool get isThrown => this == chakram || this == throwingknives;
+  bool get isGun => this == handcannon || this == cannon;
+
+  bool get twoHanded => this == greatsword || this == greataxe || this == heartmaul || this == trident || isStaff || isBow;
 }
 
 enum ShieldKind { kite, round, buckler, tower }
@@ -120,6 +170,13 @@ class Look {
     this.offhandGlow,
     this.legendary = false,
     this.hatColour,
+    this.weaponTint,
+    this.foliage,
+    this.thorns = false,
+    this.weaponRarity,
+    this.wings,
+    this.tail,
+    this.ghostly = false,
   });
 
   final String build;
@@ -147,6 +204,27 @@ class Look {
   final Color? weaponGlow, offhandGlow;
   final bool legendary;
   final Color? hatColour;
+
+  /// Material colour of the main weapon (bronze, steel, yew, moonsilver...).
+  final Color? weaponTint;
+
+  /// Bat-like wings folded behind the back (gargoyles), in this stone colour.
+  final Ramp? wings;
+
+  /// A demon's whip-like tail with a barbed tip.
+  final Ramp? tail;
+
+  /// The held weapon's rarity colour, for its soft highlight (uncommon and up).
+  final Color? weaponRarity;
+
+  /// Leaves sprouting from an ent's head and shoulders.
+  final Color? foliage;
+
+  /// Thorns along the back and arms.
+  final bool thorns;
+
+  /// A spirit (ghosts, banshees): see-through, faintly glowing, and trailing a wisp instead of legs.
+  final bool ghostly;
 }
 
 /// Glow colour for a gear element, or null for plain steel.
@@ -162,10 +240,11 @@ const _knightMetals = <String, List<Color>>{
   'chainmail': [Color(0xFFC3C8CE), Color(0xFF7D838B), Color(0xFF353A40)],
   'plate': [Color(0xFFF0F3F6), Color(0xFF9AA3AE), Color(0xFF3E454F)],
   'gilded': [Color(0xFFF6E2A0), Color(0xFFC49A3C), Color(0xFF5E4416)],
+  'bonemail': [Color(0xFFF2EAD6), Color(0xFFBFB091), Color(0xFF55493A)],
 };
 
-const _robes = <String, int>{'apprentice': 0xFF6E6252, 'arcane': 0xFF2F4F86, 'archmage': 0xFF5A2E7A, 'astral': 0xFF1C2448};
-const _leathers = <String, int>{'woodsman': 0xFF7A5233, 'studded': 0xFF5E4026, 'brigandine': 0xFF3E5232, 'shadowweave': 0xFF2C2834};
+const _robes = <String, int>{'apprentice': 0xFF6E6252, 'arcane': 0xFF2F4F86, 'archmage': 0xFF5A2E7A, 'astral': 0xFF1C2448, 'bonerobe': 0xFFCFC3A6, 'verdantrobe': 0xFF3E6A3A, 'oathrobe': 0xFFE8DCC0};
+const _leathers = <String, int>{'woodsman': 0xFF7A5233, 'studded': 0xFF5E4026, 'brigandine': 0xFF3E5232, 'shadowweave': 0xFF2C2834, 'dragonhide': 0xFF2F6A46, 'bonescale': 0xFFBFB396, 'verdantleather': 0xFF4E7A3A, 'oathleather': 0xFF9A7A4A};
 
 HeadKind _headFor(HeroClass c, GearItem? helm) {
   if (helm == null) return c == HeroClass.knight ? HeadKind.coif : HeadKind.bare;
@@ -179,6 +258,7 @@ HeadKind _headFor(HeroClass c, GearItem? helm) {
     'scoutcap' => HeadKind.scoutcap,
     'rangerhood' => HeadKind.rangerhood,
     'mask' => HeadKind.rangermask,
+    'moonmask' || 'sunmask' || 'spiritmask' => HeadKind.magemask,
     _ => c == HeroClass.knight ? HeadKind.greathelm : HeadKind.bare,
   };
 }
@@ -190,13 +270,35 @@ ShieldKind? _shieldFor(GearItem? o) => switch (o?.art) {
   _ => null,
 };
 
+/// The colour of a pair of gloves or boots: its metal, or leather, cloth or silk by kind.
+Ramp gearRamp(GearItem g) {
+  if (g.tint != null) return rampOf(Color(g.tint!), .4, .5);
+  return switch (g.art) {
+    'spellgloves' => ramp(0xFF5A3A7A, .3, .5),
+    'slippers' => ramp(0xFF6A4A7A, .3, .5),
+    'bracers' => ramp(0xFF7A5233, .28, .5),
+    _ => ramp(0xFF6E4A2E, .28, .5),
+  };
+}
+
+/// A mage's mask colour: moonlit silver, sun gold or porcelain.
+Ramp? _maskRamp(String? art) => switch (art) {
+  'moonmask' => ramp(0xFFD8E2EE, .3, .5),
+  'sunmask' => ramp(0xFFF2CC5A, .3, .5),
+  'spiritmask' => ramp(0xFFF4F0E6, .2, .45),
+  _ => null,
+};
+
 /// The player's hero, built from their class, armour tier, loot and dye.
 Look heroLook(Knight k) => lookFor(k.heroClass, k.loadout, dye: k.dye, gloves: k.gloves, poisoned: k.poisonDays > 0, trinket: k.trinket);
 
 /// A look for any class and loadout (used for the hero, friends' heroes and the class picker).
 Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = false, bool poisoned = false, GearItem? trinket}) {
   final dyeCol = Color(dyeById(dye).argb);
-  final w = l.weapon, o = l.offhand;
+  final w = l.weapon, o = l.activeOffhand; // a mismatched off-hand is stowed, not held
+  final gl = l.gloves == null ? null : gearRamp(l.gloves!), bt = l.boots == null ? null : gearRamp(l.boots!);
+  // A cape won in battle is worn in its own colour.
+  final capeCol = l.cape?.tint == null ? null : Color(l.cape!.tint!);
   final weapon = Weapon.fromArt(w?.art);
   final off = _shieldFor(o) != null ? Weapon.none : Weapon.fromArt(o?.art);
   final glow = poisoned ? elementGlow(Stat.poison) : elementGlow(w?.element);
@@ -208,18 +310,19 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
   final shield = _shieldFor(o);
   switch (c) {
     case HeroClass.knight:
-      final m = _knightMetals[l.armour];
-      final plate = l.armour == 'plate' || l.armour == 'gilded';
-      final cloth = ramp(0xFF5A4A3A, .25, .5), boot = ramp(0xFF4A3220, .2, .5);
+      final tier = armourTierById(l.armour);
+      final m = tier.metal != null ? ramp(tier.metal!, .35, .5) : _knightMetals[l.armour];
+      final plate = tier.look == ArmourLook.plate || (tier.look == ArmourLook.auto && (l.armour == 'plate' || l.armour == 'gilded' || l.armour == 'bonemail'));
+      final cloth = ramp(0xFF5A4A3A, .25, .5), boot = bt ?? ramp(0xFF4A3220, .2, .5);
       return Look(
         build: 'human',
         stance: Stance.knight,
         skin: skin,
         torso: m ?? ramp(0xFF7A5233),
-        torsoKind: plate ? TorsoKind.plate : (m == null ? TorsoKind.leather : TorsoKind.mail),
+        torsoKind: tier.look == ArmourLook.scales ? TorsoKind.scales : (plate ? TorsoKind.plate : (m == null ? TorsoKind.leather : TorsoKind.mail)),
         upper: m ?? cloth,
         fore: m ?? ramp(0xFF6E4A2E),
-        hand: gloves ? (plate ? m! : helmSteel) : ramp(0xFF5A3A22, .25, .5),
+        hand: gl ?? (gloves ? (plate ? m! : helmSteel) : ramp(0xFF5A3A22, .25, .5)),
         thigh: m ?? cloth,
         shin: plate ? m! : boot,
         boot: boot,
@@ -229,7 +332,7 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         tabard: dyeCol,
         trim: const Color(0xFFC9A24E),
         emblem: 'ck',
-        cape: shade(dyeCol, -.15),
+        cape: capeCol ?? shade(dyeCol, -.15),
         head: head,
         helm: plate && head != HeadKind.nasal ? m : helmSteel,
         plume: head == HeadKind.greathelm || head == HeadKind.sallet ? dyeCol : null,
@@ -237,12 +340,14 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         offhand: off,
         poisoned: poisoned,
         weaponGlow: glow,
+        weaponTint: w?.tint == null ? null : Color(w!.tint!),
         legendary: legendary,
+        weaponRarity: w == null || w.rarity == Rarity.common ? null : Color(w.rarity.argb),
         shield: shield == null ? null : ShieldLook(field: dyeCol, kind: shield, trim: o!.rarity.index >= Rarity.epic.index ? const Color(0xFFF3DC8E) : const Color(0xFFC9A24E)),
       );
     case HeroClass.mage:
       final robe = ramp(_robes[l.armour] ?? 0xFF6E6252, .3, .5);
-      final trim = l.armour == 'archmage' || l.armour == 'astral' ? const Color(0xFFE2C46A) : shade(robe[1], .35);
+      final trim = l.armour == 'archmage' || l.armour == 'astral' || l.armour == 'oathrobe' ? const Color(0xFFE2C46A) : (l.armour == 'bonerobe' ? const Color(0xFF6A5A44) : shade(robe[1], .35));
       return Look(
         build: 'human',
         stance: Stance.mage,
@@ -251,44 +356,47 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         torsoKind: TorsoKind.robe,
         upper: robe,
         fore: robe,
-        hand: gloves ? ramp(0xFF4A3A30, .25, .5) : skin,
+        hand: gl ?? (gloves ? ramp(0xFF4A3A30, .25, .5) : skin),
         thigh: robe,
         shin: ramp(0xFF3A2E24, .2, .5),
-        boot: ramp(0xFF3A2A1C, .2, .5),
+        boot: bt ?? ramp(0xFF3A2A1C, .2, .5),
         skirt: robe,
         trim: trim,
         belt: dyeCol,
         pauldron: l.armour == 'astral' ? ramp(0xFF2C3A6E, .35, .5) : null,
-        cape: l.armour == 'apprentice' ? null : shade(robe[1], -.25),
+        cape: capeCol ?? (l.armour == 'apprentice' ? null : shade(robe[1], -.25)),
         head: head,
         hatColour: dyeCol,
-        helm: helmSteel,
+        helm: _maskRamp(l.helm?.art) ?? helmSteel,
         hair: const Color(0xFF5A4630),
         beard: l.armour == 'archmage' || l.armour == 'astral' ? const Color(0xFFD8D2C4) : null,
         weapon: weapon == Weapon.none ? Weapon.staff : weapon,
         offhand: off,
         weaponGlow: glow ?? const Color(0xFFFF9A3A),
+        weaponTint: w?.tint == null ? null : Color(w!.tint!),
         offhandGlow: elementGlow(o?.element),
         legendary: legendary,
+        weaponRarity: w == null || w.rarity == Rarity.common ? null : Color(w.rarity.argb),
       );
     case HeroClass.ranger:
       final leather = ramp(_leathers[l.armour] ?? 0xFF7A5233, .28, .5);
-      final dark = l.armour == 'shadowweave';
+      final dark = l.armour == 'shadowweave', dragon = l.armour == 'dragonhide';
       return Look(
         build: 'lean',
         stance: Stance.ranger,
         skin: skin,
         torso: leather,
-        torsoKind: l.armour == 'woodsman' ? TorsoKind.leather : (l.armour == 'brigandine' ? TorsoKind.mail : TorsoKind.studded),
-        upper: ramp(dark ? 0xFF24222A : 0xFF4E5A3A, .25, .5),
+        torsoKind: dragon || l.armour == 'bonescale' ? TorsoKind.scales : (l.armour == 'woodsman' ? TorsoKind.leather : (l.armour == 'brigandine' ? TorsoKind.mail : TorsoKind.studded)),
+        upper: dragon ? leather : ramp(dark ? 0xFF24222A : 0xFF4E5A3A, .25, .5),
         fore: leather,
-        hand: gloves ? ramp(0xFF3A2A1A, .25, .5) : skin,
-        thigh: ramp(dark ? 0xFF1E1C22 : 0xFF4A4232, .2, .5),
-        shin: ramp(0xFF4A3220, .2, .5),
-        boot: ramp(0xFF3A2616, .2, .5),
+        hand: gl ?? (gloves ? ramp(0xFF3A2A1A, .25, .5) : skin),
+        thigh: dragon ? ramp(0xFF24523A, .25, .5) : ramp(dark ? 0xFF1E1C22 : 0xFF4A4232, .2, .5),
+        shin: dragon ? leather : ramp(0xFF4A3220, .2, .5),
+        pauldron: dragon ? ramp(0xFF3E7A52, .3, .5) : null,
+        boot: bt ?? ramp(0xFF3A2616, .2, .5),
         belt: const Color(0xFF2A1A0E),
         pouch: true,
-        cape: shade(dyeCol, -.3),
+        cape: capeCol ?? shade(dyeCol, -.3),
         capeFlow: 6,
         head: head,
         hood: ramp(dark ? 0xFF24202A : 0xFF3E5232, .25, .55),
@@ -299,8 +407,10 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         weapon: weapon == Weapon.none ? Weapon.bow : weapon,
         offhand: off,
         weaponGlow: glow,
+        weaponTint: w?.tint == null ? null : Color(w!.tint!),
         offhandGlow: elementGlow(o?.element),
         legendary: legendary,
+        weaponRarity: w == null || w.rarity == Rarity.common ? null : Color(w.rarity.argb),
       );
   }
 }
@@ -310,8 +420,361 @@ const _black2 = <Color>[Color(0xFF8A8E98), Color(0xFF3A3D45), Color(0xFF121316)]
 const _gold = <Color>[Color(0xFFF3DC8E), Color(0xFFC9A24E), Color(0xFF6E521B)];
 const _darkBoot = <Color>[Color(0xFF4A4D55), Color(0xFF24262B), Color(0xFF0C0D0F)];
 const _bone = <Color>[Color(0xFFEFE6CC), Color(0xFFCBBF9C), Color(0xFF7E7058)];
+const _darkBone = <Color>[Color(0xFFD8CCB0), Color(0xFF9A8C70), Color(0xFF4A402E)];
+
+
+/// An ent: bark all over, roots for feet, leaves for hair.
+Look _ent({required int bark, required Color foliage, required Color eyes, double scale = 1, Color? moss, bool thorns = false, bool miasma = false}) {
+  final b = ramp(bark, .22, .55), dark = ramp(bark, .1, .65);
+  return Look(
+    build: 'ent',
+    stance: Stance.ent,
+    scale: scale,
+    skin: b,
+    torso: b,
+    torsoKind: TorsoKind.bark,
+    upper: b,
+    fore: b,
+    hand: dark,
+    thigh: b,
+    shin: b,
+    boot: dark,
+    head: HeadKind.ent,
+    eyeGlow: eyes,
+    beard: moss,
+    hair: foliage,
+    belt: moss ?? shade(Color(bark), -.3),
+    foliage: foliage,
+    thorns: thorns,
+    miasma: miasma,
+  );
+}
+
+final Map<String, Look> entLooks = {
+  'twigling': _ent(bark: 0xFF9A7A4E, foliage: const Color(0xFF8BCB52), eyes: const Color(0xFFE8F07A), scale: .62),
+  'thornEnt': _ent(bark: 0xFF5A3E28, foliage: const Color(0xFF4E7A2E), eyes: const Color(0xFFFFB04A), thorns: true),
+  'mossEnt': _ent(bark: 0xFF6E5C40, foliage: const Color(0xFF3E6E2E), eyes: const Color(0xFFB8F08A), moss: const Color(0xFF6A9A3E), scale: 1.05),
+  'blightEnt': _ent(bark: 0xFF3E3038, foliage: const Color(0xFF6A4A7A), eyes: const Color(0xFFC07AFF), miasma: true, thorns: true),
+  'ironEnt': _ent(bark: 0xFF70747C, foliage: const Color(0xFF5A7A5A), eyes: const Color(0xFF9ADFFF), scale: 1.15),
+  'oakheart': _ent(bark: 0xFF7A5634, foliage: const Color(0xFFD8782A), eyes: const Color(0xFFFFD45A), moss: const Color(0xFF6A8A3A), scale: 1.32),
+};
+
+Look _gargoyle({double scale = 1.15, int stone = 0xFF8A8C90, Color eyes = const Color(0xFFB07AFF)}) {
+  final s = ramp(stone, .25, .55);
+  return Look(
+    build: 'brute',
+    scale: scale,
+    stance: Stance.goblin,
+    skin: s,
+    torso: s,
+    torsoKind: TorsoKind.stone,
+    upper: s,
+    fore: s,
+    hand: ramp(stone, .15, .6),
+    thigh: s,
+    shin: s,
+    boot: ramp(stone, .15, .6),
+    belt: shade(Color(stone), -.4),
+    head: HeadKind.gargoyle,
+    eyeGlow: eyes,
+    wings: ramp(stone, .2, .6),
+  );
+}
+
+Look _demon({String build = 'brute', double scale = 1.1, int hide = 0xFFA8302A, Weapon weapon = Weapon.spear, bool wings = false, Color eyes = const Color(0xFFFFD45A)}) {
+  final h = ramp(hide, .25, .55), dark = ramp(hide, .1, .65);
+  return Look(
+    build: build,
+    scale: scale,
+    stance: Stance.knight,
+    skin: h,
+    torso: h,
+    upper: h,
+    fore: h,
+    hand: dark,
+    thigh: ramp(0xFF2A1A18, .2, .5),
+    shin: dark,
+    boot: const [Color(0xFF4A3A30), Color(0xFF241A14), Color(0xFF0C0806)],
+    belt: const Color(0xFF1A0E0A),
+    head: HeadKind.demon,
+    eyeGlow: eyes,
+    weapon: weapon,
+    weaponGlow: const Color(0xFFFF6A1A),
+    wings: wings ? ramp(0xFF5A1A18, .2, .6) : null,
+    tail: dark,
+    pauldron: wings ? const [Color(0xFF8A8E98), Color(0xFF3A3D45), Color(0xFF121316)] : null,
+  );
+}
+
+/// A spirit: a hooded shape (or a banshee's wailing face) in a trailing robe, see-through.
+Look _spirit({required int robe, HeadKind head = HeadKind.hood, Color eyes = const Color(0xFF9ADFFF), double scale = 1, Color hair = const Color(0xFFE8F0F4), bool crown = false}) {
+  final r = ramp(robe, .3, .55);
+  return Look(
+    build: 'lean',
+    scale: scale,
+    stance: Stance.mage,
+    skin: ramp(0xFFDCE8EE, .2, .5),
+    torso: r,
+    torsoKind: TorsoKind.robe,
+    upper: r,
+    fore: r,
+    hand: ramp(0xFFDCE8EE, .2, .5),
+    thigh: r,
+    shin: r,
+    boot: r,
+    skirt: r,
+    head: head,
+    hood: r,
+    hair: hair,
+    eyeGlow: eyes,
+    tattered: true,
+    cape: shade(Color(robe), -.2),
+    capeFlow: 14,
+    crown: crown,
+    ghostly: true,
+  );
+}
+
+/// A ghoul: gaunt grey-green flesh in rags, hunched, with long claws.
+Look _ghoul({double scale = 1, bool king = false}) {
+  final flesh = ramp(king ? 0xFF7A8A6A : 0xFF8A9A7A, .2, .55);
+  return Look(
+    build: king ? 'brute' : 'lean',
+    scale: scale,
+    stance: Stance.goblin,
+    skin: flesh,
+    torso: ramp(0xFF4A4436, .2, .5),
+    torsoKind: TorsoKind.rags,
+    upper: flesh,
+    fore: flesh,
+    hand: ramp(0xFF6A7A5A, .2, .55),
+    thigh: ramp(0xFF3A362A, .2, .5),
+    shin: flesh,
+    boot: flesh,
+    belt: const Color(0xFF2A241A),
+    head: HeadKind.ghoul,
+    hair: const Color(0xFF3A3A30),
+    eyeGlow: king ? const Color(0xFFFF6A3A) : const Color(0xFFD8F07A),
+    wraps: true,
+    gore: true,
+    crown: king,
+    cape: king ? const Color(0xFF3A2A2A) : null,
+    tattered: true,
+    weapon: king ? Weapon.greataxe : Weapon.none,
+  );
+}
+
+/// A witch (or the Coven Mother): green skin, a black robe, a crooked hat and a wand.
+Look _witch({double scale = 1, bool mother = false}) {
+  final robe = ramp(mother ? 0xFF2A1A3A : 0xFF24202A, .3, .5);
+  return Look(
+    build: 'lean',
+    scale: scale,
+    stance: Stance.mage,
+    skin: ramp(0xFF8AB06A, .25, .5),
+    torso: robe,
+    torsoKind: TorsoKind.robe,
+    upper: robe,
+    fore: robe,
+    hand: ramp(0xFF8AB06A, .25, .5),
+    thigh: robe,
+    shin: ramp(0xFF1E1A20, .2, .5),
+    boot: ramp(0xFF1A1418, .2, .5),
+    skirt: robe,
+    trim: mother ? const Color(0xFFB07AFF) : const Color(0xFF6A3A8A),
+    belt: const Color(0xFF4A2A5A),
+    pouch: true,
+    head: HeadKind.witch,
+    hatColour: mother ? const Color(0xFF2A1A3A) : const Color(0xFF1E1A24),
+    hair: mother ? const Color(0xFFE8E4DA) : const Color(0xFF3A3A3A),
+    eyeGlow: mother ? const Color(0xFFE07AFF) : const Color(0xFFB8F05A),
+    cape: mother ? const Color(0xFF1A0E24) : null,
+    tattered: true,
+    weapon: mother ? Weapon.staff : Weapon.wand,
+    weaponGlow: mother ? const Color(0xFFE07AFF) : const Color(0xFF8BE05A),
+    offhand: mother ? Weapon.orb : Weapon.none,
+    offhandGlow: const Color(0xFF8BE05A),
+  );
+}
+
+/// An unholy wizard: a deep hood with burning eyes, a black-and-crimson robe and a skull staff.
+Look _warlock({double scale = 1, bool arch = false}) {
+  final robe = ramp(arch ? 0xFF3A0E14 : 0xFF1E1A22, .3, .5);
+  return Look(
+    build: 'human',
+    scale: scale,
+    stance: Stance.mage,
+    skin: ramp(0xFFB8A8A0, .2, .5),
+    torso: robe,
+    torsoKind: TorsoKind.robe,
+    upper: robe,
+    fore: robe,
+    hand: ramp(0xFF8A7A78, .2, .5),
+    thigh: robe,
+    shin: ramp(0xFF1A1418, .2, .5),
+    boot: ramp(0xFF14100E, .2, .5),
+    skirt: robe,
+    trim: const Color(0xFFB8302A),
+    belt: const Color(0xFF2A0A0A),
+    head: arch ? HeadKind.skullHood : HeadKind.hood,
+    hood: ramp(arch ? 0xFF2A0A10 : 0xFF14121A, .3, .5),
+    eyeGlow: arch ? const Color(0xFFFF3A2A) : const Color(0xFFC07AFF),
+    cape: arch ? const Color(0xFF14060A) : const Color(0xFF0E0C12),
+    tattered: true,
+    capeFlow: 8,
+    pauldron: arch ? _darkBone : null,
+    weapon: arch ? Weapon.orkstaff : Weapon.staff,
+    weaponGlow: arch ? const Color(0xFFFF3A2A) : const Color(0xFFC07AFF),
+    miasma: arch,
+  );
+}
+
+/// A minotaur: a bull-headed brute in a loincloth with a huge axe.
+Look _minotaur({double scale = 1.15, bool lord = false}) {
+  final hide = ramp(lord ? 0xFF4A2E22 : 0xFF7A4A30, .25, .55), dark = ramp(lord ? 0xFF2A1A12 : 0xFF4A2A18, .15, .6);
+  return Look(
+    build: lord ? 'giant' : 'brute',
+    scale: scale,
+    stance: Stance.knight,
+    skin: hide,
+    torso: hide,
+    torsoKind: TorsoKind.fur,
+    upper: hide,
+    fore: hide,
+    hand: dark,
+    thigh: ramp(0xFF5A3A28, .2, .5),
+    shin: dark,
+    boot: const [Color(0xFF3A3434), Color(0xFF1A1616), Color(0xFF080606)],
+    belt: const Color(0xFF3A2414),
+    head: HeadKind.bull,
+    eyeGlow: lord ? const Color(0xFFFF4A2A) : const Color(0xFFE84A2A),
+    weapon: Weapon.greataxe,
+    pauldron: lord ? _black : null,
+    knee: lord ? _black : null,
+    tail: dark,
+    rusty: !lord,
+  );
+}
+
+/// A centaur's upper half (drawn on a horse's body): bare-chested, a bow and a quiver.
+Look _centaur({bool chief = false}) {
+  final skin = ramp(0xFFC08A62, .25, .5);
+  return Look(
+    build: 'human',
+    scale: chief ? 1.1 : 1,
+    stance: Stance.ranger,
+    skin: skin,
+    torso: chief ? _black : skin,
+    torsoKind: chief ? TorsoKind.plate : TorsoKind.plain,
+    upper: skin,
+    fore: skin,
+    hand: skin,
+    thigh: skin,
+    shin: skin,
+    boot: skin,
+    belt: const Color(0xFF4A3420),
+    head: chief ? HeadKind.sallet : HeadKind.bare,
+    helm: chief ? _black2 : null,
+    plume: chief ? const Color(0xFFE8E4DA) : null,
+    hair: const Color(0xFF3A2A1A),
+    beard: chief ? const Color(0xFF6A5A4A) : null,
+    quiver: const Color(0xFF6E4A2A),
+    weapon: chief ? Weapon.spear : Weapon.longbow,
+    pauldron: chief ? _black2 : null,
+  );
+}
 
 final Map<String, Look> foeLooks = {
+  ...entLooks,
+  'ghost': _spirit(robe: 0xFF9AB8C8),
+  'banshee': _spirit(robe: 0xFFB8C8D8, head: HeadKind.banshee, eyes: const Color(0xFFCFF4FF)),
+  'wailingqueen': _spirit(robe: 0xFF8AA0C8, head: HeadKind.banshee, eyes: const Color(0xFFE8D8FF), scale: 1.3, hair: const Color(0xFFCFC8E8), crown: true),
+  'ghoul': _ghoul(),
+  'ghoulking': _ghoul(scale: 1.3, king: true),
+  'witch': _witch(),
+  'covenmother': _witch(scale: 1.25, mother: true),
+  'warlock': _warlock(),
+  'archwarlock': _warlock(scale: 1.25, arch: true),
+  'minotaur': _minotaur(),
+  'minotaurlord': _minotaur(scale: 1.4, lord: true),
+  'centaur': _centaur(),
+  'centaurchief': _centaur(chief: true),
+  'pitdemon': _demon(),
+  'demonlord': _demon(build: 'giant', scale: 1.35, hide: 0xFF8A1E1A, weapon: Weapon.greatsword, wings: true, eyes: const Color(0xFFFFF0A0)),
+  'gargoyle': _gargoyle(),
+  'gargoylematriarch': _gargoyle(scale: 1.45, stone: 0xFF6A6470, eyes: const Color(0xFFFF6A3A)),
+  // The Bone Colossus: a giant skeleton in horned, rusted plate with a greatsword.
+  'bonecolossus': Look(
+    build: 'skeleton',
+    scale: 1.55,
+    stance: Stance.knight,
+    skin: _darkBone,
+    torso: _darkBone,
+    torsoKind: TorsoKind.ribs,
+    upper: _darkBone,
+    fore: _darkBone,
+    hand: ramp(0xFF6A5E52, .3, .5),
+    thigh: _darkBone,
+    shin: ramp(0xFF6A5E52, .3, .5),
+    boot: _darkBone,
+    knee: ramp(0xFF6A5E52, .3, .5),
+    elbow: ramp(0xFF6A5E52, .3, .5),
+    pauldron: ramp(0xFF6A5E52, .3, .5),
+    belt: const Color(0xFF1A120A),
+    cape: const Color(0xFF2A1416),
+    tattered: true,
+    capeFlow: 10,
+    head: HeadKind.skullHorned,
+    helm: ramp(0xFF6A5E52, .3, .5),
+    eyeGlow: const Color(0xFF7AF0C8),
+    weapon: Weapon.greatsword,
+    weaponGlow: const Color(0xFF7AF0C8),
+    rusty: true,
+  ),
+  // The Ork Behemoth: a giant ork in black plate with a burning greataxe.
+  'orkbehemoth': Look(
+    build: 'giant',
+    scale: 1.42,
+    stance: Stance.knight,
+    skin: ramp(0xFF4A6A26, .25, .5),
+    torso: _black,
+    torsoKind: TorsoKind.plate,
+    upper: _black,
+    fore: ramp(0xFF4A6A26, .25, .5),
+    hand: _black,
+    thigh: ramp(0xFF3A2E22, .2, .5),
+    shin: _black,
+    boot: _darkBoot,
+    knee: _black,
+    elbow: _black,
+    pauldron: _bone,
+    belt: const Color(0xFF6E1A12),
+    head: HeadKind.orkWarlord,
+    helm: _black,
+    hair: const Color(0xFF1A140E),
+    weapon: Weapon.greataxe,
+    weaponGlow: const Color(0xFFFF6A1A),
+    gore: true,
+  ),
+  'cyclops': Look(
+    build: 'giant',
+    scale: 1.4,
+    stance: Stance.knight,
+    skin: ramp(0xFFB09878, .25, .5),
+    torso: ramp(0xFFB09878, .25, .5),
+    upper: ramp(0xFFB09878, .25, .5),
+    fore: ramp(0xFFB09878, .25, .5),
+    hand: ramp(0xFFB09878, .25, .5),
+    thigh: ramp(0xFF6A4A2A, .2, .5),
+    shin: ramp(0xFFB09878, .25, .5),
+    boot: ramp(0xFF8A7458, .2, .55),
+    belt: const Color(0xFF3A2414),
+    head: HeadKind.cyclops,
+    hair: const Color(0xFF3A2A1A),
+    weapon: Weapon.club,
+    wraps: true,
+    pauldron: _bone,
+  ),
   'goblin': Look(
     build: 'goblin',
     stance: Stance.goblin,
@@ -523,5 +986,311 @@ final Map<String, Look> foeLooks = {
     eyeGlow: const Color(0xFFFF6A3E),
     crown: true,
     weapon: Weapon.greatsword,
+  ),
+  'ork': Look(
+    build: 'brute',
+    stance: Stance.knight,
+    skin: ramp(0xFF6A8A3E, .25, .5),
+    torso: ramp(0xFF5A4630, .2, .5),
+    torsoKind: TorsoKind.leather,
+    upper: ramp(0xFF6A8A3E, .25, .5),
+    fore: ramp(0xFF6A8A3E, .25, .5),
+    hand: ramp(0xFF6A8A3E, .25, .5),
+    thigh: ramp(0xFF4A3A28, .2, .5),
+    shin: ramp(0xFF4A3A28, .2, .5),
+    boot: ramp(0xFF2E2216, .2, .5),
+    pauldron: _bone,
+    head: HeadKind.ork,
+    hair: const Color(0xFF1A140E),
+    weapon: Weapon.orkclub,
+    wraps: true,
+    shield: const ShieldLook(field: Color(0xFF5E4A30), kind: ShieldKind.round),
+  ),
+  'orkArcher': Look(
+    build: 'brute',
+    stance: Stance.ranger,
+    skin: ramp(0xFF5E7E36, .25, .5),
+    torso: ramp(0xFF4A3E2A, .2, .5),
+    torsoKind: TorsoKind.studded,
+    upper: ramp(0xFF5E7E36, .25, .5),
+    fore: ramp(0xFF4A3E2A, .2, .5),
+    hand: ramp(0xFF5E7E36, .25, .5),
+    thigh: ramp(0xFF3E3424, .2, .5),
+    shin: ramp(0xFF3E3424, .2, .5),
+    boot: ramp(0xFF2A1E12, .2, .5),
+    head: HeadKind.ork,
+    hair: const Color(0xFF2A1A0E),
+    quiver: const Color(0xFF5A3E22),
+    weapon: Weapon.orkbow,
+  ),
+  'orkShaman': Look(
+    build: 'brute',
+    stance: Stance.mage,
+    skin: ramp(0xFF7A8A44, .25, .5),
+    torso: ramp(0xFF4E3A2E, .2, .5),
+    torsoKind: TorsoKind.robe,
+    skirt: ramp(0xFF4E3A2E, .2, .5),
+    trim: const Color(0xFFB8A070),
+    upper: ramp(0xFF7A8A44, .25, .5),
+    fore: ramp(0xFF7A8A44, .25, .5),
+    hand: ramp(0xFF7A8A44, .25, .5),
+    thigh: ramp(0xFF3A2C22, .2, .5),
+    shin: ramp(0xFF7A8A44, .25, .5),
+    boot: ramp(0xFF2A2018, .2, .5),
+    belt: const Color(0xFF7A1D14),
+    head: HeadKind.orkShaman,
+    hair: const Color(0xFF1A140E),
+    weapon: Weapon.orkstaff,
+    weaponGlow: const Color(0xFF8BE05A),
+  ),
+  'orkBerserker': Look(
+    build: 'brute',
+    scale: 1.12,
+    stance: Stance.pillager,
+    skin: ramp(0xFF5A7A30, .25, .5),
+    torso: ramp(0xFF5A7A30, .25, .5),
+    torsoKind: TorsoKind.plain,
+    gore: true,
+    upper: ramp(0xFF5A7A30, .25, .5),
+    fore: ramp(0xFF5A7A30, .25, .5),
+    hand: ramp(0xFF5A7A30, .25, .5),
+    thigh: ramp(0xFF3E3020, .2, .5),
+    shin: ramp(0xFF3E3020, .2, .5),
+    boot: ramp(0xFF2A1E12, .2, .5),
+    belt: const Color(0xFF7A1D14),
+    head: HeadKind.ork,
+    hair: const Color(0xFF8A2A14),
+    weapon: Weapon.greataxe,
+    wraps: true,
+  ),
+  'orkWarlord': Look(
+    build: 'brute',
+    scale: 1.28,
+    stance: Stance.knight,
+    skin: ramp(0xFF4E6E2A, .25, .5),
+    torso: _black,
+    torsoKind: TorsoKind.plate,
+    upper: _black,
+    fore: ramp(0xFF4E6E2A, .25, .5),
+    hand: _black,
+    thigh: ramp(0xFF3A2E22, .2, .5),
+    shin: _black,
+    boot: _darkBoot,
+    knee: _black,
+    elbow: _black,
+    pauldron: _bone,
+    belt: const Color(0xFF2A1A0E),
+    cape: const Color(0xFF6E1A12),
+    tattered: true,
+    capeFlow: 14,
+    head: HeadKind.orkWarlord,
+    helm: _black,
+    hair: const Color(0xFF1A140E),
+    weapon: Weapon.orkclub,
+    weaponGlow: const Color(0xFFFF8A2A),
+  ),
+  'skeleton': const Look(
+    build: 'skeleton',
+    stance: Stance.knight,
+    skin: _bone,
+    torso: _bone,
+    torsoKind: TorsoKind.ribs,
+    upper: _bone,
+    fore: _bone,
+    hand: _bone,
+    thigh: _bone,
+    shin: _bone,
+    boot: _bone,
+    knee: _bone,
+    elbow: _bone,
+    belt: Color(0xFF3A2A1C),
+    head: HeadKind.skull,
+    eyeGlow: Color(0xFF7FE8FF),
+    weapon: Weapon.shortsword,
+    rusty: true,
+  ),
+  'skeletonArcher': Look(
+    build: 'skeleton',
+    stance: Stance.ranger,
+    skin: _bone,
+    torso: _bone,
+    torsoKind: TorsoKind.ribs,
+    upper: _bone,
+    fore: _bone,
+    hand: _bone,
+    thigh: _bone,
+    shin: _bone,
+    boot: _bone,
+    knee: _bone,
+    elbow: _bone,
+    belt: const Color(0xFF2A2018),
+    head: HeadKind.skullHood,
+    hood: ramp(0xFF3A3630, .2, .55),
+    eyeGlow: const Color(0xFF9AFF7A),
+    cape: const Color(0xFF34302A),
+    tattered: true,
+    quiver: const Color(0xFF4A3A28),
+    weapon: Weapon.bow,
+  ),
+  'skeletonChampion': Look(
+    build: 'skeleton',
+    scale: 1.1,
+    stance: Stance.knight,
+    skin: _bone,
+    torso: _bone,
+    torsoKind: TorsoKind.ribs,
+    upper: _bone,
+    fore: _bone,
+    hand: ramp(0xFF8A7A6A, .3, .5),
+    thigh: _bone,
+    shin: ramp(0xFF8A7A6A, .3, .5),
+    boot: _bone,
+    knee: ramp(0xFF8A7A6A, .3, .5),
+    elbow: _bone,
+    pauldron: ramp(0xFF8A7A6A, .3, .5),
+    belt: const Color(0xFF2A1A0E),
+    cape: const Color(0xFF3A1A18),
+    tattered: true,
+    head: HeadKind.skullHelm,
+    helm: ramp(0xFF8A7A6A, .3, .5),
+    eyeGlow: const Color(0xFFFF6A3A),
+    weapon: Weapon.axe,
+    rusty: true,
+    shield: const ShieldLook(field: Color(0xFF4A3A2E), kind: ShieldKind.round),
+  ),
+  'dragonboneWarden': const Look(
+    build: 'skeleton',
+    scale: 1.25,
+    stance: Stance.knight,
+    skin: _darkBone,
+    torso: _darkBone,
+    torsoKind: TorsoKind.ribs,
+    upper: _darkBone,
+    fore: _darkBone,
+    hand: _darkBone,
+    thigh: _darkBone,
+    shin: _darkBone,
+    boot: _darkBone,
+    knee: _darkBone,
+    elbow: _darkBone,
+    pauldron: _darkBone,
+    belt: Color(0xFF1A1218),
+    cape: Color(0xFF241830),
+    tattered: true,
+    capeFlow: 12,
+    head: HeadKind.skullHorned,
+    eyeGlow: Color(0xFFC07AFF),
+    weapon: Weapon.halberd,
+    weaponGlow: Color(0xFFC07AFF),
+  ),
+};
+
+/// The people who stop you on the road with quests.
+final Map<String, Look> questGiverLooks = {
+  'king': Look(
+    build: 'human',
+    stance: Stance.mage,
+    skin: ramp(0xFFE0B48C, .25, .5),
+    torso: ramp(0xFF8A1E22, .3, .5),
+    torsoKind: TorsoKind.robe,
+    upper: ramp(0xFF8A1E22, .3, .5),
+    fore: ramp(0xFF8A1E22, .3, .5),
+    hand: ramp(0xFFE0B48C, .25, .5),
+    thigh: ramp(0xFF8A1E22, .3, .5),
+    shin: ramp(0xFF3A2E24, .2, .5),
+    boot: ramp(0xFF3A2A1C, .2, .5),
+    skirt: ramp(0xFF8A1E22, .3, .5),
+    trim: const Color(0xFFE2C46A),
+    belt: const Color(0xFFC9A24E),
+    cape: const Color(0xFF3A1A6A),
+    head: HeadKind.bare,
+    crown: true,
+    hair: const Color(0xFFCFC8B8),
+    beard: const Color(0xFFD8D2C4),
+    weapon: Weapon.sceptre,
+    weaponGlow: const Color(0xFFFFE27A),
+  ),
+  'villager': Look(
+    build: 'human',
+    stance: Stance.mage,
+    skin: ramp(0xFFD9A77E, .25, .5),
+    torso: ramp(0xFF7A6A48, .25, .5),
+    torsoKind: TorsoKind.leather,
+    upper: ramp(0xFFB8A888, .25, .5),
+    fore: ramp(0xFFB8A888, .25, .5),
+    hand: ramp(0xFFD9A77E, .25, .5),
+    thigh: ramp(0xFF5A4A34, .2, .5),
+    shin: ramp(0xFF5A4A34, .2, .5),
+    boot: ramp(0xFF3A2A1C, .2, .5),
+    belt: const Color(0xFF4A3420),
+    pouch: true,
+    head: HeadKind.bare,
+    hair: const Color(0xFF8A5A2A),
+  ),
+  'seer': Look(
+    build: 'human',
+    stance: Stance.mage,
+    skin: ramp(0xFFC89A78, .25, .5),
+    torso: ramp(0xFF3A2A4E, .3, .5),
+    torsoKind: TorsoKind.robe,
+    upper: ramp(0xFF3A2A4E, .3, .5),
+    fore: ramp(0xFF3A2A4E, .3, .5),
+    hand: ramp(0xFFC89A78, .25, .5),
+    thigh: ramp(0xFF3A2A4E, .3, .5),
+    shin: ramp(0xFF2A2030, .2, .5),
+    boot: ramp(0xFF2A2030, .2, .5),
+    skirt: ramp(0xFF3A2A4E, .3, .5),
+    trim: const Color(0xFFB89AE0),
+    belt: const Color(0xFF6A4A8A),
+    head: HeadKind.cowl,
+    hatColour: const Color(0xFF6A4A8A),
+    hair: const Color(0xFFD8D2C4),
+    weapon: Weapon.wand,
+    offhand: Weapon.orb,
+    offhandGlow: const Color(0xFFC07AFF),
+    weaponGlow: const Color(0xFFC07AFF),
+  ),
+  'mage': Look(
+    build: 'human',
+    stance: Stance.mage,
+    skin: ramp(0xFFE0B48C, .25, .5),
+    torso: ramp(0xFF2F4F86, .3, .5),
+    torsoKind: TorsoKind.robe,
+    upper: ramp(0xFF2F4F86, .3, .5),
+    fore: ramp(0xFF2F4F86, .3, .5),
+    hand: ramp(0xFFE0B48C, .25, .5),
+    thigh: ramp(0xFF2F4F86, .3, .5),
+    shin: ramp(0xFF3A2E24, .2, .5),
+    boot: ramp(0xFF3A2A1C, .2, .5),
+    skirt: ramp(0xFF2F4F86, .3, .5),
+    trim: const Color(0xFFE2C46A),
+    belt: const Color(0xFF9A2A22),
+    cape: const Color(0xFF1C2448),
+    head: HeadKind.wizardhat,
+    hatColour: const Color(0xFF2F4F86),
+    hair: const Color(0xFF8A8A8A),
+    beard: const Color(0xFFD8D2C4),
+    weapon: Weapon.staff,
+    weaponGlow: const Color(0xFF9ADFFF),
+  ),
+  'fisherman': Look(
+    build: 'human',
+    stance: Stance.mage,
+    skin: ramp(0xFFC08A62, .25, .5),
+    torso: ramp(0xFFD8A830, .3, .5), // a yellow oilskin
+    torsoKind: TorsoKind.leather,
+    upper: ramp(0xFFD8A830, .3, .5),
+    fore: ramp(0xFFD8A830, .3, .5),
+    hand: ramp(0xFFC08A62, .25, .5),
+    thigh: ramp(0xFF3A4A5A, .2, .5),
+    shin: ramp(0xFF2A2A2A, .2, .5),
+    boot: ramp(0xFF1E1E1E, .2, .5),
+    belt: const Color(0xFF4A3420),
+    pouch: true,
+    head: HeadKind.scoutcap,
+    hatColour: const Color(0xFF2E4A6A),
+    hair: const Color(0xFFB8B2A6),
+    beard: const Color(0xFFD8D2C4),
+    weapon: Weapon.fishingrod,
   ),
 };

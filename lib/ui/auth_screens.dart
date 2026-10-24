@@ -96,6 +96,35 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  Future<void> _google() async {
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+    try {
+      await widget.auth.signInWithGoogle();
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _forgot() async {
+    final email = _email.text.trim();
+    if (validateEmail(email) != null) {
+      setState(() => _error = 'Enter your email above, then tap "Forgot password?" again.');
+      return;
+    }
+    try {
+      await widget.auth.sendPasswordReset(email);
+      if (mounted) setState(() => _error = null);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('A reset link is on its way to $email.')));
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
+  }
+
   void _useDemo() {
     _email.text = demoEmail;
     _password.text = demoPassword;
@@ -136,8 +165,20 @@ class _SignInScreenState extends State<SignInScreen> {
           padding: const EdgeInsets.only(top: 8),
           child: Text(_error!, style: Txt.body(size: 14, color: Palette.blood)),
         ),
-      const SizedBox(height: 14),
+      if (widget.auth.isReal)
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _working ? null : _forgot,
+            child: Text('Forgot password?', style: Txt.body(size: 14, color: Palette.inkSoft, weight: FontWeight.w600)),
+          ),
+        ),
+      const SizedBox(height: 10),
       StoneButton(title: _working ? 'Signing in…' : 'Sign in', tone: ButtonTone.blood, onPressed: _working ? null : _submit),
+      if (widget.auth.supportsGoogle) ...[
+        const SizedBox(height: 8),
+        StoneButton(title: 'Continue with Google', onPressed: _working ? null : _google),
+      ],
       const SizedBox(height: 10),
       TextButton(
         onPressed: _working ? null : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SignUpScreen(auth: widget.auth))),
@@ -146,6 +187,9 @@ class _SignInScreenState extends State<SignInScreen> {
           style: Txt.body(color: Palette.blood, weight: FontWeight.w700),
         ),
       ),
+      if (widget.auth.isReal)
+        Text('Your Calorie Card account works here too.', textAlign: TextAlign.center, style: Txt.body(size: 13.5, color: Palette.inkSoft))
+      else ...[
       const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.all(10),
@@ -173,6 +217,7 @@ class _SignInScreenState extends State<SignInScreen> {
           ],
         ),
       ),
+      ],
     ],
   );
 }

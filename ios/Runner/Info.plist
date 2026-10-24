@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>CalorieKnight uses the camera to scan food barcodes and photograph meals.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CalorieKnight can read a meal photo you choose to work out what you ate.</string>
 </dict>
 </plist>

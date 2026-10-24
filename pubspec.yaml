@@ -14,6 +14,13 @@ dependencies:
   http: ^1.2.0
   google_fonts: ^6.2.0
   crypto: ^3.0.3
+  # Sign-in, in The Calorie Card's Firebase project (same versions as The Calorie Card).
+  firebase_core: ^3.4.1
+  firebase_auth: ^5.2.1
+  cloud_firestore: ^5.4.1
+  # The Calorie Card's contactless logging: barcode scanning and meal photos.
+  mobile_scanner: ^7.4.2
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

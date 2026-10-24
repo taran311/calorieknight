@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../game/controller.dart';
+import '../game/classes.dart';
 import '../game/loot.dart';
 import 'hero_view.dart';
 import 'theme.dart';
@@ -47,7 +48,7 @@ class _LootWindow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final k = controller.state.knight, old = controller.engine.equippedFor(item), col = rarityColour(item.rarity);
-    final better = old == null || item.score > old.score;
+    final better = item.slot == GearSlot.armour ? armourTierById(item.art).reduction > armourTierById(k.loadouts[item.heroClass ?? k.heroClass]!.armour).reduction : old == null || item.score > old.score;
     return PopScope(
       canPop: false,
       child: Dialog(
@@ -75,7 +76,7 @@ class _LootWindow extends StatelessWidget {
                     children: [
                       GearIcon(item: item, size: 72, heroClass: k.heroClass, dye: k.dye),
                       const SizedBox(width: 12),
-                      Expanded(child: GearDetails(item: item, compare: old)),
+                      Expanded(child: GearDetails(item: item, compare: old, kit: k.loadouts[item.heroClass ?? k.heroClass])),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -86,7 +87,14 @@ class _LootWindow extends StatelessWidget {
                       border: Border.all(color: Colors.black.withValues(alpha: .55)),
                       borderRadius: BorderRadius.circular(2),
                     ),
-                    child: old == null
+                    child: item.slot == GearSlot.armour
+                        ? Text(
+                            'Damage taken −${(armourTierById(item.art).reduction * 100).round()}%${boneArmour.contains(item.art) ? ', and undead counters hit 25% softer' : (armourTierById(item.art).perkText != null ? ', and ${armourTierById(item.art).perkText}' : ', the best armour there is')}. '
+                            'Replaces your ${armourTierById(k.loadouts[item.heroClass ?? k.heroClass]!.armour).name} '
+                            '(−${(armourTierById(k.loadouts[item.heroClass ?? k.heroClass]!.armour).reduction * 100).round()}%).',
+                            style: Txt.onStone(size: 13.5, color: Palette.cream),
+                          )
+                        : old == null
                         ? Text('Your ${item.slot.label.toLowerCase()} slot is empty.', style: Txt.onStone(size: 13.5))
                         : Row(
                             children: [

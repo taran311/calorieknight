@@ -4,13 +4,20 @@
 import 'package:flutter/material.dart';
 
 import '../art/body.dart';
+import '../art/creatures.dart';
+import '../art/hounds.dart';
 import '../art/looks.dart';
+import '../art/rare_looks.dart';
 import '../art/poses.dart';
 import '../art/rig.dart';
+import '../game/ammo.dart';
 import '../game/catalog.dart';
+import '../game/classes.dart';
 import '../game/controller.dart';
+import '../game/loot.dart' show specialCharge;
 import '../game/models.dart';
 import '../game/rules.dart';
+import '../game/spells.dart';
 import 'auth_screens.dart' show CrestPainter;
 import 'journal_panel.dart' show fmt;
 import 'theme.dart';
@@ -24,7 +31,7 @@ class StatsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = controller.state, k = s.knight, mh = maxHp(k), hp = k.hp.clamp(0, mh);
+    final s = controller.state, k = s.knight, mh = maxHp(k), hp = controller.shownHeroHp.clamp(0, mh);
     Widget chip(Widget child) => DecoratedBox(
       decoration: stoneDecoration(fill: Palette.stone1, raised: false),
       child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), child: child),
@@ -154,14 +161,37 @@ class StatusBadges extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final k = state.knight, ds = dragonStage(k);
+    final k = state.knight, ds = dragonStage(k), move = k.loadouts[k.heroClass]!.weapon?.specialMove;
     final items = <(String, Color, String)>[
+      if (move != null)
+        (
+          '${move.name} ${'●' * state.specialCharge}${'○' * (specialCharge - state.specialCharge)}',
+          Color(move.argb),
+          'Special attack: ${move.desc}. Charges with each full swing and fires on the ${specialCharge}th.',
+        ),
       if (k.status.contains(Status.ale)) ('Ale-addled', const Color(0xFFF0C96A), '1 in 4 swings miss today'),
       if (k.status.contains(Status.sluggish)) ('Sluggish', const Color(0xFFE8A066), 'Swings deal 30% less today'),
       if (k.status.contains(Status.sugarCrash)) ('Sugar crash', const Color(0xFFEC9BB0), 'Took 5 HP this morning'),
+      if (k.status.contains(Status.inspired)) ('Inspired', const Color(0xFF9BE27A), 'Yesterday was balanced: swings +20% today'),
       if (k.poisonDays > 0) ('Poisoned blade · ${k.poisonDays}d', const Color(0xFF9BE27A), '+6 per swing, 15 each night'),
       if (ds != null) ('${ds.name}${ds.chip > 0 ? ' +${ds.chip}' : ''}', const Color(0xFFF4955F), 'Your dragon companion'),
+      if (petStage(k) != null) ('${petStage(k)!.$2.name} +${petStage(k)!.$2.bite}', petStage(k)!.$1 == Pet.hellhound ? const Color(0xFFFF7A2A) : const Color(0xFFC8C4BC), 'Your companion bites on every swing'),
       if (state.cheersToday > 0) ('Cheered ×${state.cheersToday.clamp(0, 3)}', const Color(0xFFF2D27A), '+${state.cheersToday.clamp(0, 3) * 5}% damage until you rest'),
+      if (ammoById(k.ammoLoaded) != null && k.heroClass == HeroClass.ranger)
+        (
+          '${ammoById(k.ammoLoaded)!.label(missileFor(k.loadout.weapon?.art))} ×${k.ammo[k.ammoLoaded] ?? 0}',
+          Color(ammoById(k.ammoLoaded)!.argb),
+          missileFor(k.loadout.weapon?.art) == null ? 'Needs a bow, crossbow, chakram or knives' : '${ammoById(k.ammoLoaded)!.desc}: one per full swing',
+        ),
+      if (k.heroClass == HeroClass.mage && spellById(k.preparedSpell) != null)
+        (
+          '${spellById(k.preparedSpell)!.name} ${'●' * state.mana.clamp(0, spellById(k.preparedSpell)!.cost)}${'○' * (spellById(k.preparedSpell)!.cost - state.mana).clamp(0, 5)}',
+          Color(spellById(k.preparedSpell)!.argb),
+          '${spellById(k.preparedSpell)!.desc}. Casts when you have ${spellById(k.preparedSpell)!.cost} mana (1 per full swing).',
+        ),
+      if (state.summons > 0) ('Skeletons ×${state.summons} · ${state.summonTurns} swings', const Color(0xFFC89AFF), 'Your summoned dead strike on each full swing'),
+      if (state.wards > 0) ('Ward ×${state.wards}', const Color(0xFF7FB8E8), 'Absorbs the foe\'s next counter'),
+      if (state.wantedDays > 0) ('Wanted', const Color(0xFFE07A5A), 'Merchant prices +50% for ${state.wantedDays} more ${state.wantedDays == 1 ? 'rest' : 'rests'}'),
       if (noDamage(state)) ('Peaceful', Palette.frost, 'Your hero takes no damage'),
     ];
     return Wrap(
@@ -188,10 +218,58 @@ class StatusBadges extends StatelessWidget {
 
 /// A still picture of a foe, scaled to fit its box.
 class FoePortrait extends StatelessWidget {
-  const FoePortrait({super.key, required this.foeIndex});
+  const FoePortrait({super.key, required this.foeIndex, this.rare});
   final int foeIndex;
+
+  /// A rare variant standing in for the regular foe.
+  final Rare? rare;
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _FoePainter(foeLooks[foes[foeIndex].look]!));
+  Widget build(BuildContext context) => TypePortrait(type: encounterType(foeIndex, rare));
+}
+
+/// A still picture of any foe type (rare variants and World Bosses included).
+class TypePortrait extends StatelessWidget {
+  const TypePortrait({super.key, required this.type});
+  final FoeType type;
+  @override
+  Widget build(BuildContext context) {
+    if (type.hound) return CustomPaint(painter: _HoundPortrait());
+    if (type.dragon) return CustomPaint(painter: _DragonPortrait(dragonLookOf(type)));
+    return CustomPaint(painter: _FoePainter(foeLookOf(type)));
+  }
+}
+
+class _HoundPortrait extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    final scale = size.height / 92 * 1.1;
+    canvas.translate(size.width * .7, size.height * .98);
+    canvas.scale(-1, 1);
+    drawHound(canvas, demonHoundLook, Offset.zero, scale, 0, still: true);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_HoundPortrait old) => false;
+}
+
+class _DragonPortrait extends CustomPainter {
+  _DragonPortrait(this.look);
+  final DragonLook look;
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    // Head and shoulders fill the frame.
+    final scale = size.height / (dragonHeight * look.scale) * 1.05;
+    drawFoeDragon(canvas, look, Offset(size.width * .78, size.height * .98), scale, 0, still: true);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_DragonPortrait old) => old.look != look;
 }
 
 /// A still picture of any foe look (used for raid bosses).

@@ -11,12 +11,12 @@ import '../art/body.dart';
 import '../art/looks.dart';
 import '../art/poses.dart';
 import '../art/scenery.dart';
-import '../game/catalog.dart';
 import '../game/controller.dart';
 import '../game/engine.dart';
 import '../game/models.dart';
 import '../game/rules.dart';
-import 'journal_panel.dart' show FoodTagChip, fmt;
+import '../services/food_country.dart';
+import 'journal_panel.dart' show fmt;
 import 'theme.dart';
 
 /// A stone-framed window with a parchment body.
@@ -78,200 +78,6 @@ class GameWindow extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ---------------- Log food ----------------
-
-/// Opens the food picker. Returns the chosen food, or null if the player closed it.
-Future<LoggedFood?> showFoodWindow(BuildContext context, GameController c) => showDialog<LoggedFood>(
-  context: context,
-  builder: (_) => _FoodWindow(controller: c),
-);
-
-class _FoodWindow extends StatefulWidget {
-  const _FoodWindow({required this.controller});
-  final GameController controller;
-  @override
-  State<_FoodWindow> createState() => _FoodWindowState();
-}
-
-class _FoodWindowState extends State<_FoodWindow> {
-  final _search = TextEditingController();
-  final _name = TextEditingController(), _kcal = TextEditingController();
-  final _carbs = TextEditingController(text: '0'), _protein = TextEditingController(text: '0'), _fat = TextEditingController(text: '0');
-  FoodTag? _tag;
-  String? _error, _searchError;
-  List<Food> _results = sampleFoods;
-  Timer? _debounce;
-
-  @override
-  void initState() {
-    super.initState();
-    _runSearch('');
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    for (final t in [_search, _name, _kcal, _carbs, _protein, _fat]) {
-      t.dispose();
-    }
-    super.dispose();
-  }
-
-  void _onQuery(String q) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), () => _runSearch(q));
-  }
-
-  Future<void> _runSearch(String q) async {
-    try {
-      final r = await widget.controller.foodSearch.search(q);
-      if (!mounted) return;
-      setState(() {
-        _results = r;
-        _searchError = null;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _searchError = "Couldn't search foods right now. Check your connection, or add the food below.");
-    }
-  }
-
-  void _log(LoggedFood f) => Navigator.of(context).pop(f);
-
-  void _submitCustom() {
-    final name = _name.text.trim(), kcal = int.tryParse(_kcal.text.trim());
-    if (name.isEmpty) return setState(() => _error = 'Name the food so it shows in your rations.');
-    if (kcal == null || kcal <= 0) return setState(() => _error = 'Enter the calories as a whole number above 0.');
-    double g(TextEditingController t) => double.tryParse(t.text.trim()) ?? 0;
-    _log(LoggedFood(name, kcal, g(_carbs), g(_protein), g(_fat), _tag));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final decimals = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))];
-    InputDecoration dec(String label, {String? hint}) => InputDecoration(labelText: label, hintText: hint);
-    return GameWindow(
-      title: 'Log food',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _search,
-            onChanged: _onQuery,
-            style: Txt.body(),
-            decoration: dec('Search foods', hint: 'e.g. lentil soup').copyWith(prefixIcon: const Icon(Icons.search, color: Palette.inkSoft)),
-          ),
-          const SizedBox(height: 6),
-          Text("Prototype menu. The real app uses The Calorie Card's food search.", style: Txt.body(size: 13, italic: true, color: Palette.inkSoft)),
-          if (_searchError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(_searchError!, style: Txt.body(size: 13.5, color: Palette.blood)),
-            ),
-          const SizedBox(height: 8),
-          for (final f in _results)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Material(
-                color: const Color(0xFFE8DCBD),
-                shape: const RoundedRectangleBorder(
-                  side: BorderSide(color: Palette.parchLine),
-                  borderRadius: BorderRadius.all(Radius.circular(2)),
-                ),
-                child: InkWell(
-                  onTap: () => _log(LoggedFood.of(f)),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Wrap(
-                                spacing: 6,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  Text(f.name, style: Txt.body(weight: FontWeight.w500)),
-                                  if (f.tag != null) FoodTagChip(f.tag!),
-                                ],
-                              ),
-                              Text(
-                                'Carbs ${f.carbs.round()} g · Protein ${f.protein.round()} g · Fat ${f.fat.round()} g',
-                                style: Txt.body(size: 12.5, color: Palette.inkSoft),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text('${fmt(f.kcal)} kcal', style: Txt.inkLabel(size: 14)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (_results.isEmpty) Text('No matches. Add it below.', style: Txt.body(italic: true, color: Palette.inkSoft)),
-          const SizedBox(height: 12),
-          Text('Something else', style: Txt.inkLabel(size: 14, color: Palette.inkSoft)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _name,
-            style: Txt.body(),
-            decoration: dec('Food', hint: 'e.g. Tempeh salad bowl'),
-          ),
-          const SizedBox(height: 6),
-          LayoutBuilder(
-            builder: (context, box) {
-              final fields = [
-                TextField(controller: _kcal, keyboardType: TextInputType.number, inputFormatters: decimals, style: Txt.body(), decoration: dec('kcal')),
-                TextField(controller: _carbs, keyboardType: TextInputType.number, inputFormatters: decimals, style: Txt.body(), decoration: dec('Carbs g')),
-                TextField(controller: _protein, keyboardType: TextInputType.number, inputFormatters: decimals, style: Txt.body(), decoration: dec('Protein g')),
-                TextField(controller: _fat, keyboardType: TextInputType.number, inputFormatters: decimals, style: Txt.body(), decoration: dec('Fat g')),
-              ];
-              final cols = box.maxWidth < 340 ? 2 : 4, w = ((box.maxWidth - 6 * (cols - 1)) / cols).floorToDouble();
-              return Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [for (final f in fields) SizedBox(width: w, child: f)],
-              );
-            },
-          ),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<FoodTag?>(
-            // ignore: deprecated_member_use
-            value: _tag, // `value` works on every Flutter from 3.27; newer versions also accept `initialValue`
-            dropdownColor: const Color(0xFFF3EAD2),
-            style: Txt.body(),
-            decoration: dec('Category'),
-            items: [
-              DropdownMenuItem(value: null, child: Text('Everyday food', style: Txt.body())),
-              for (final t in FoodTag.values)
-                DropdownMenuItem(
-                  value: t,
-                  child: Text(switch (t) {
-                    FoodTag.alcohol => 'Ale (alcohol)',
-                    FoodTag.fastFood => 'Fast food',
-                    FoodTag.sweets => 'Sweets & chocolate',
-                  }, style: Txt.body()),
-                ),
-            ],
-            onChanged: (v) => setState(() => _tag = v),
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(_error!, style: Txt.body(size: 14, color: Palette.blood)),
-            ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: StoneButton(title: 'Log & strike', tone: ButtonTone.blood, compact: true, onPressed: _submitCustom),
-          ),
-        ],
       ),
     );
   }
@@ -550,6 +356,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
   late final _protein = TextEditingController(text: '${s.protein}');
   late final _fat = TextEditingController(text: '${s.fat}');
   late bool _gentle = s.gentle, _peaceful = s.peaceful || widget.controller.state.damagePaused, _inn = s.innScene;
+  late String? _country = s.foodCountry;
   String? _error;
   bool _confirmReset = false;
 
@@ -569,7 +376,9 @@ class _SettingsWindowState extends State<_SettingsWindow> {
     if (c < 0 || p < 0 || f < 0 || c + p + f != 100) {
       return setState(() => _error = 'Carbs, protein and fat must add up to 100%. They add up to ${math.max(0, c) + math.max(0, p) + math.max(0, f)}%.');
     }
-    widget.controller.applySettings(Settings(name: name, allowance: a, carbs: c, protein: p, fat: f, gentle: _gentle, peaceful: _peaceful, innScene: _inn));
+    widget.controller.applySettings(
+      Settings(name: name, allowance: a, carbs: c, protein: p, fat: f, gentle: _gentle, peaceful: _peaceful, innScene: _inn, foodCountry: _country),
+    );
     Navigator.of(context).pop();
   }
 
@@ -625,6 +434,20 @@ class _SettingsWindowState extends State<_SettingsWindow> {
                 child: TextField(controller: _fat, keyboardType: TextInputType.number, inputFormatters: digits, style: Txt.body(), decoration: dec('Fat')),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String?>(
+            // ignore: deprecated_member_use
+            value: _country,
+            isExpanded: true,
+            dropdownColor: const Color(0xFFF3EAD2),
+            style: Txt.body(),
+            decoration: const InputDecoration(labelText: 'Food country (sizes, brands and labels)'),
+            items: [
+              DropdownMenuItem(value: null, child: Text('From this device (${FoodCountry.nameOf(FoodCountry.deviceCountry)})', style: Txt.body())),
+              for (final e in FoodCountry.countries.entries) DropdownMenuItem(value: e.key, child: Text(e.value, style: Txt.body())),
+            ],
+            onChanged: (v) => setState(() => _country = v),
           ),
           const SizedBox(height: 10),
           Text('Play', style: Txt.inkLabel(size: 14, color: Palette.inkSoft)),

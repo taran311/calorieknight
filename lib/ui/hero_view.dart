@@ -11,6 +11,8 @@ import '../art/poses.dart';
 import '../art/rig.dart';
 import '../game/classes.dart';
 import '../game/loot.dart';
+import '../game/models.dart' show Loadout;
+import '../game/rules.dart' show dualStrikeShare;
 import 'theme.dart';
 
 /// A full-length hero, optionally breathing. Fits the figure to its box.
@@ -140,8 +142,11 @@ class _GearPainter extends CustomPainter {
 
 /// Item name in rarity colour with its slot and rarity underneath, and stat lines.
 class GearDetails extends StatelessWidget {
-  const GearDetails({super.key, required this.item, this.compare, this.dense = false});
+  const GearDetails({super.key, required this.item, this.compare, this.dense = false, this.kit});
   final GearItem item;
+
+  /// The kit it would join, to say what it pairs with and whether it would be used.
+  final Loadout? kit;
 
   /// What it would replace; stat changes are shown against it.
   final GearItem? compare;
@@ -177,6 +182,38 @@ class GearDetails extends StatelessWidget {
                 ],
               ),
             ),
+        if (g.enchant != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('✦ ${g.enchant!.title}: ${g.enchant!.describe}', style: Txt.onStone(size: dense ? 13 : 14, color: const Color(0xFFC8A8F0)).copyWith(fontWeight: FontWeight.w700)),
+          ),
+        if (materialOf(g) case (final name, final tier))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('Material: $name, tier $tier of 6 ${'●' * tier}${'○' * (6 - tier)}', style: Txt.onStone(size: dense ? 12.5 : 13.5, color: Palette.parch2)),
+          ),
+        ..._pairing(g),
+        if (g.slot == GearSlot.cape && capeByAbility(g.special) != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('✦ ${capeByAbility(g.special)!.ability}.', style: Txt.onStone(size: dense ? 12.5 : 13.5, color: Palette.amber)),
+          ),
+        if (gearSetById(g.gearSet) case final set?)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '✦ ${set.name} set: 2 pieces: ${set.twoText}. All 3 (gloves, boots and ring): ${set.threeText}.',
+              style: Txt.onStone(size: dense ? 12.5 : 13.5, color: Palette.amber),
+            ),
+          ),
+        if (g.specialMove != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Special attack: ${g.specialMove!.name}. ${g.specialMove!.desc}. Charges over $specialCharge full swings.',
+              style: Txt.onStone(size: dense ? 13 : 14, color: Color(g.specialMove!.argb)).copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
         if (g.lore != null && !dense)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -184,6 +221,43 @@ class GearDetails extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// What a weapon or off-hand pairs with, and a warning if it wouldn't work with the kit.
+  List<Widget> _pairing(GearItem g) {
+    final style = Txt.onStone(size: dense ? 12.5 : 13.5, color: Palette.parch2);
+    const warn = Color(0xFFE0A070);
+    if (g.slot == GearSlot.weapon) {
+      final want = offhandKindsFor(g.art);
+      final off = kit?.offhand;
+      return [
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Crit chance +${weaponCrit(g)}% (${weaponKindCrit(g.art)}% from its kind, ${rarityCrit(g.rarity)}% from rarity) · crits hit ${critMultiplier(g) == 2.5 ? '2.5' : '2'}x',
+            style: style.copyWith(color: rarityColour(g.rarity)),
+          ),
+        ),
+        Text(want.isEmpty ? 'Two-handed: no off-hand.' : 'Off-hand: ${want.map((w) => w.label).join(' or ')}.', style: style),
+        if (want.contains(OffhandKind.parrying) && lightBlades.contains(g.art) || want.contains(OffhandKind.wand) || want.contains(OffhandKind.sidearm))
+          Text('Can dual wield: a second weapon in the off hand strikes after every full swing (${(dualStrikeShare * 100).round()}% of it), but no shield or tome.', style: style),
+        if (off != null && !offhandWorksWith(g, off))
+          Text('Your ${off.name} won\'t be used with this.', style: style.copyWith(color: warn)),
+      ];
+    }
+    if (g.slot == GearSlot.offhand) {
+      final kind = offhandKindOf(g.art);
+      if (kind == null) return const [];
+      final w = kit?.weapon;
+      return [
+        Padding(padding: const EdgeInsets.only(top: 4), child: Text('Goes with ${kind.weapons}.', style: style)),
+        if (kind == OffhandKind.wand || kind == OffhandKind.sidearm || (kind == OffhandKind.parrying && g.heroClass != HeroClass.ranger))
+          Text('Dual wield: strikes after every full swing for ${(dualStrikeShare * 100).round()}% of it.', style: style),
+        if (kit != null && !offhandWorksWith(w, g))
+          Text('Not used with your ${w?.name ?? 'bare hands'}: it waits in your kit until you wield a weapon it suits.', style: style.copyWith(color: warn)),
+      ];
+    }
+    return const [];
   }
 
   Widget _delta(int d, Stat s) {

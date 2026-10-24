@@ -23,6 +23,8 @@ Ramp ramp(int argb, [double light = .32, double dark = .45]) {
   return [shade(c, light), c, shade(c, -dark)];
 }
 
+Ramp rampOf(Color c, [double light = .32, double dark = .45]) => [shade(c, light), c, shade(c, -dark)];
+
 Ramp darker(Ramp r) => [shade(r[0], -.22), shade(r[1], -.22), shade(r[2], -.15)];
 
 Offset polar(double angleDeg, double len) => Offset(math.sin(angleDeg * deg) * len, math.cos(angleDeg * deg) * len);
@@ -44,7 +46,7 @@ void fillPath(Canvas c, Path path, Object col, Offset a, Offset b, {bool line = 
 
 /// A tapered capsule from [a] (radius [ra]) to [b] (radius [rb]), shaded across its width so it reads
 /// as a rounded limb. The rounded ends are the joints.
-void capsule(Canvas c, Offset a, double ra, Offset b, double rb, Ramp col, {bool line = true}) {
+Path capsulePath(Offset a, double ra, Offset b, double rb) {
   final d = b - a, len = d.distance;
   final path = Path();
   if (len < .5) {
@@ -56,12 +58,42 @@ void capsule(Canvas c, Offset a, double ra, Offset b, double rb, Ramp col, {bool
     path.arcTo(Rect.fromCircle(center: b, radius: rb), ang - al, 2 * al, false);
     path.close();
   }
+  return path;
+}
+
+Paint _capsuleFill(Offset a, Offset b, double r, Ramp col) {
+  final d = b - a, len = d.distance;
   var n = Offset(-d.dy, d.dx) / (len == 0 ? 1 : len);
   if (n.dx * -.55 + n.dy * -.83 < 0) n = -n; // light from the upper left
-  final mid = (a + b) / 2, r = math.max(ra, rb);
-  final paint = Paint()..shader = ui.Gradient.linear(mid + n * r, mid - n * r, col, const [0, .45, 1]);
-  c.drawPath(path, paint);
+  final mid = (a + b) / 2;
+  return Paint()..shader = ui.Gradient.linear(mid + n * r, mid - n * r, col, const [0, .45, 1]);
+}
+
+void capsule(Canvas c, Offset a, double ra, Offset b, double rb, Ramp col, {bool line = true}) {
+  final path = capsulePath(a, ra, b, rb);
+  c.drawPath(path, _capsuleFill(a, b, math.max(ra, rb), col));
   if (line) c.drawPath(path, _stroke..strokeWidth = 1.4);
+}
+
+/// A jointed limb drawn as one piece: every segment's outline first, then every fill on top, so
+/// no seam shows where the upper and lower parts meet. [joints] are (point, radius) from the
+/// root to the tip; [cols] has one ramp per segment.
+void limb(Canvas c, List<(Offset, double)> joints, List<Ramp> cols) {
+  final paths = [for (var i = 0; i + 1 < joints.length; i++) capsulePath(joints[i].$1, joints[i].$2, joints[i + 1].$1, joints[i + 1].$2)];
+  for (final p in paths) {
+    c.drawPath(p, _stroke..strokeWidth = 2.8);
+  }
+  for (var i = 0; i < paths.length; i++) {
+    c.drawPath(paths[i], _capsuleFill(joints[i].$1, joints[i + 1].$1, math.max(joints[i].$2, joints[i + 1].$2), cols[i]));
+  }
+  // A soft crease at each bend, where the parts fold.
+  for (var i = 1; i + 1 < joints.length; i++) {
+    final (p, r) = joints[i];
+    final d = joints[i + 1].$1 - joints[i - 1].$1, len = d.distance;
+    if (len < 1) continue;
+    final n = Offset(-d.dy, d.dx) / len;
+    c.drawLine(p + n * r * .55, p - n * r * .1, Paint()..color = const Color(0x2E000000)..strokeWidth = 1.1..strokeCap = StrokeCap.round);
+  }
 }
 
 void blob(Canvas c, Offset p, double r, Ramp col, {bool line = true}) => capsule(c, p, r, p + const Offset(.01, 0), r, col, line: line);

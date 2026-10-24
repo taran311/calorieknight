@@ -49,6 +49,10 @@ class ProfilePage extends StatelessWidget {
                     row('Email', email),
                     row('Day', '${s.day}'),
                     row('Foes felled', '${s.foesFelled}'),
+                    row('Rare foes felled', '${s.raresFelled}'),
+                    row('Treasure chests opened', '${s.chestsOpened}'),
+                    row('Quests completed', '${s.questsDone}'),
+                    row('Thefts tried (caught)', '${s.heists} (${s.heistsCaught})'),
                     row('Balanced days this week', '${balancedThisWeek(s, DateTime.now())}'),
                     row('Balanced streak', '${balancedStreak(s)}'),
                     row('Gold', fmt(k.coins)),
@@ -66,6 +70,7 @@ class ProfilePage extends StatelessWidget {
                         children: [
                           Text('Invite friends', style: Txt.label(size: 15, color: Palette.amber)),
                           Text(friends.inviteLink, style: Txt.onStone(size: 14, color: Palette.cream)),
+                          Text('When a friend joins from it, you both earn the Twinbound Band. Bring 3 and you earn the Banner of Fellowship.', style: Txt.onStone(size: 12.5)),
                         ],
                       ),
                     ),
@@ -80,6 +85,7 @@ class ProfilePage extends StatelessWidget {
                   ],
                 ),
               ),
+              if (s.referredBy == null) ...[const SizedBox(height: 10), _JoinInvite(controller: controller)],
               const SizedBox(height: 10),
               StoneButton(
                 title: 'Settings',
@@ -96,4 +102,64 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// "Did a friend invite you?" Enter their name or link: you're added as friends and you both earn
+/// the Twinbound Band.
+class _JoinInvite extends StatefulWidget {
+  const _JoinInvite({required this.controller});
+  final GameController controller;
+  @override
+  State<_JoinInvite> createState() => _JoinInviteState();
+}
+
+class _JoinInviteState extends State<_JoinInvite> {
+  final _field = TextEditingController();
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  Future<void> _join() async {
+    setState(() => _busy = true);
+    final err = await widget.controller.redeemInvite(_field.text);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = err;
+    });
+    if (err == null) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Welcome aboard! The Twinbound Band waits in your spoils.')));
+  }
+
+  @override
+  Widget build(BuildContext context) => Stone(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Did a friend invite you?', style: Txt.label(size: 15, color: Palette.amber)),
+        Text('Enter their username or invite link and you both earn the Twinbound Band.', style: Txt.onStone(size: 12.5)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _field,
+                style: Txt.onStone(size: 14, color: Palette.cream),
+                decoration: const InputDecoration(isDense: true, hintText: '@username or link'),
+                onSubmitted: (_) => _join(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            StoneButton(title: _busy ? 'Joining…' : 'Join', compact: true, onPressed: _busy ? null : _join),
+          ],
+        ),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_error!, style: Txt.onStone(size: 12.5, color: const Color(0xFFE0A070)))),
+      ],
+    ),
+  );
 }

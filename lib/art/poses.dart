@@ -13,6 +13,7 @@ final Map<Stance, Pose> stances = {
   Stance.rogue: Pose.of({J.lean: 12, J.head: -6, J.nS: 46, J.nE: 62, J.nW: 150, J.fS: 22, J.fE: 78, J.fW: 150, J.nH: 22, J.nK: 20, J.fH: -18, J.fK: 16}),
   Stance.zombie: Pose.of({J.lean: 16, J.head: 14, J.nS: 80, J.nE: 8, J.fS: 72, J.fE: 14, J.nH: 6, J.nK: 6, J.fH: -8, J.fK: 8}),
   Stance.pillager: Pose.of({J.lean: 6, J.head: -4, J.nS: 8, J.nE: 104, J.nW: 100, J.fS: 34, J.fE: 46, J.fW: 90, J.nH: 16, J.nK: 12, J.fH: -14, J.fK: 8}),
+  Stance.ent: Pose.of({J.lean: 3, J.head: 4, J.nS: 34, J.nE: 34, J.nW: 20, J.fS: 22, J.fE: 30, J.nH: 9, J.nK: 5, J.fH: -9, J.fK: 5}),
   Stance.rose: Pose.of({J.lean: 4, J.head: -2, J.nS: 30, J.nE: 58, J.nW: 108, J.fS: 36, J.fE: 52, J.fW: 108, J.nH: 16, J.nK: 10, J.fH: -14, J.fK: 8}),
 };
 
@@ -32,6 +33,13 @@ Pose idlePose(Stance s, double t, {double phase = 0, bool still = false}) {
     p[J.head] += math.sin(t / 700 + phase) * 6;
     p[J.nS] += math.sin(t / 820) * 6;
     p[J.fS] += math.sin(t / 760 + 1) * 6;
+  }
+  if (s == Stance.ent) {
+    // Slow, creaking sway, like branches in the wind.
+    p[J.lean] += math.sin(t / 1300 + phase) * 2.5;
+    p[J.nS] += math.sin(t / 1100 + phase) * 5;
+    p[J.fS] += math.sin(t / 1200 + phase + 1) * 5;
+    p[J.nE] += math.sin(t / 900 + phase) * 4;
   }
   if (s == Stance.goblin) p[J.dy] = -(math.sin(t / 420 + phase).abs()) * 3;
   return p;

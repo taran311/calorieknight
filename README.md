@@ -19,13 +19,22 @@ flutter run -d chrome          # or an Android device/emulator
 
 Needs Flutter 3.27 or newer.
 
-## Signing in (testing build)
+## Signing in
 
-The app opens on a sign-in screen. Accounts are mocked on the device until Firebase is connected:
+On the **web**, sign-in uses Firebase Auth in The Calorie Card's project (`auth-af04a`), so the food proxy accepts lookups:
 
-- **Demo account:** `demo@calorieknight.test` / `Excalibur-2026` (there's also a "Fill in demo account" button)
-- **Create an account** works too; each account gets its own hero, save and friends.
-- **Sign out** is on the Profile tab.
+- Create an account with any real email, sign in with **Google**, or use an existing **Calorie Card account**: they're the same accounts.
+- "Forgot password?" emails a reset link.
+- Each account still gets its own hero and save. These are kept on the device until CalorieKnight's own database is set up; that can be a separate Firestore database inside the same project, so game data never mixes with Calorie Card data.
+
+On **Android and iOS**, CalorieKnight's apps need registering in that project first. Run this in this folder:
+
+```
+dart pub global activate flutterfire_cli
+flutterfire configure --project=auth-af04a --platforms=android,ios,web
+```
+
+Until then, the phone builds use the device-only test sign-in. The demo account is `demo@calorieknight.test` / `Excalibur-2026`, but food lookups won't work there.
 
 ## Screens
 
@@ -45,17 +54,495 @@ The app opens on a sign-in screen. Accounts are mocked on the device until Fireb
 | --- | --- | --- | --- |
 | Trait | +15 max HP, 5% less damage taken | +3 fire on every full swing | 15% critical hits (double damage) |
 | Armour (merchant) | Padded › Chainmail › Plate › Gilded | Apprentice › Arcane › Archmage › Astral robes | Woodsman › Studded › Brigandine › Shadowweave |
-| Weapons (loot) | swords, falchion, axes, mace, morning star, warhammer | staves, crystal staff, wands, sceptre | bows, longbow, crossbows |
-| Off-hand (loot) | buckler, kite and tower shields | tome, orb | quiver, parrying dagger |
+| Weapons (loot) | daggers, short swords, longswords, halberds, spears, battleaxes, scimitars, two-handed swords, maces, morning stars, warhammers | staves, crystal staff, wands, sceptre | shortbows, longbows, chakrams, throwing knives, crossbows, hand cannons, bombards |
+| Off-hand (loot) | buckler, kite and tower shields, off-hand daggers | spellbooks, orbs, off-hand wands | quiver, hand crossbow, parrying dagger |
 | Head (loot) | nasal helm, great helm, sallet | pointed hat, cowl, circlet | scout's cap, ranger's hood, mask |
 
 Armour tiers reduce damage by 0 / 15 / 30 / 40% and cost 0 / 120 / 300 / 600 gold. Retraining costs 100 + 20 per level; you keep level and gold, and each class keeps its own armour and gear.
+
+## Realms
+
+Each realm has six foes, ending in a boss. Skeletons are undead, like zombies, so holy damage works on them.
+
+1. **The Greywood Road**: goblins, rogues, zombies, a Restless Skeleton, pillagers; boss Sir Mordrake of the Black Rose.
+2. **The Ashen Hills**: their tougher kin and a Skeleton Archer; boss the Black Rose Commander.
+3. **The Orkmarch**: Ork Raider, Ork Archer, Ork Shaman, Ork Berserker, a Skeleton Champion; boss **Grushnak the Ork Warlord**. Orks can drop their weapon for your class (12%, the Warlord 35%, Epic): an **Ork club** (knight), **Ork bow** (ranger) or **Ork staff** (mage).
+4. **The Wyrmspine Peaks** (end game): Ash Wyvern, Moss Dragon, Frost Wyrm, Obsidian Dragon, the Dragonbone Warden; boss **Vorthax the Elder Wyrm**. Dragons can drop a **dragon egg** (15%, Vorthax 40%, if you have no dragon yet) and their prize for your class (10%, Vorthax 35%, Legendary): **Dragonhide armour** (ranger, the best armour at −45% damage), a **Dragon dagger** (knight) or a **Dragon staff** (mage). The merchant never sells these.
+
+## The Elderwood (ents)
+
+The third realm, between the Ashen Hills and the Orkmarch: Twigling, Thornback Ent, Mossbeard Ent, Blightroot Ent, Ironbark Ent (tough) and the boss Grandfather Oakheart. Ents take double fire damage and half poison. They can drop a heartwood weapon for your class (Heartwood maul, Heartwood bow or Living staff: epic, with regeneration), and Oakheart can drop the legendary Acorn of Oakheart trinket. Older saves are moved forward so you stay on the same foe.
+
+## Quests
+
+After 20% of regular victories (when no rare foe turned up) someone stops you on the road: **the King**, **a villager**, **the Seer** or **a wandering mage**. The offer pops up after the merchant. **Accept & fight** brings the quest foe walking in straight away; **Decline** carries on. Closing the window keeps the offer at camp for later. The regular foe waits with its wounds until the quest is done, and you can give up a quest from the foe card.
+
+| Giver | Foe | Thanks |
+|---|---|---|
+| King | A gilded champion (1.6× HP) | Royal purse, epic+ loot, gilded/ancient chest |
+| Villager | A raider of a named village (1.0× HP) | Two potions, a hot meal (+20 HP), a modest chest |
+| Seer | A cursed or ancient foe from a vision (1.4× HP) | Two epic-or-legendary drops |
+| Mage | An elemental thief (1.3× HP) | Bonus XP, loot carrying the element |
+
+### Quest weapons and special attacks
+
+A grateful giver sometimes hands over their own legendary weapon: 20% from the King or Seer, 15% from a villager or mage. There are 12, one per giver per class, and only quest givers have them. Each has a **special attack** that charges with every full swing (shown as pips in the battle HUD) and fires by itself on the 4th, with its own banner and effects.
+
+| Giver | Knight | Ranger | Mage |
+|---|---|---|---|
+| King | Crownsplitter: *Royal Verdict* (3x + holy fire) | Sovereign's Longbow: *Volley of the Crown* (5 arrows, 3x) | Sceptre of the Realm: *Edict of Light* (2.5x + holy fire) |
+| Villager | Millbrook Pitchfork: *Harvest Home* (2x, heal 20) | Poacher's Shortbow: *Lucky Shot* (sure crit, +25 gold) | Hedge-Witch's Wand: *Hearth Charm* (1.8x, heal 25) |
+| Seer | Fateblade: *Twist of Fate* (1.5x, sure crit) | Omen Bow: *Foretold Shot* (4x) | Eye of Ages: *Glimpse Beyond* (2x, sure crit) |
+| Mage | Stormbrand: *Thunderclap* (2.5x + frost) | Emberstring: *Rain of Fire* (volley, 2.5x + fire) | Staff of the Archmagus: *Meteor* (3x + fire, falls from the sky) |
+
+Specials never miss (except Harvest Home and Hearth Charm), and their holy fire hurts any foe, not only the undead.
+
+## Opportunities (pickpocketing and stealing)
+
+After 15% of regular victories when nothing else turned up, you might find a snoring merchant, a tipsy noble, the tax collector's wagon, a rival adventurer, a shrine's offering box, or something realm-specific: a goblin stash, the Black Rose quartermaster, a sleeping ent's hollow, an ork chieftain's tent, or a sleeping dragon's hoard. You can **pickpocket** (about 70%: a modest haul, a small chance of loot), **steal** (about 45%: a big haul, a 50% chance of loot, and sometimes a jackpot), or walk on. The odds are shown on the buttons, adjusted by class (rangers +12%, knights −6%, plate armour clanks), level and fortune, and lowered by how well guarded the mark is.
+
+If you're caught pickpocketing, you pay a fine or take a clip round the ear (lose HP). If you're caught stealing, you might be beaten and fined, lose a potion, become **Wanted** (merchant prices +50% for your next 2 rests), or face an **ambush**: a furious foe steps up then and there, and beating it pays like a rare foe. Robbing the shrine risks the gods' curse (sluggish today). HP never drops below 1 from a theft.
+
+## World Boss
+
+One huge boss that every hero fights together, shown at camp.
+
+- **Once a day** (by calendar day, UTC) each hero can join and land one blow. It's about one balanced day of damage, and half again if yesterday was balanced or lean.
+- **No time limit.** The boss stays until it falls, then the next one appears. There are seven in rotation, each a little sturdier.
+- **Scales with real activity.** HP is sized for the heroes who joined in the last 3 days and how hard they hit, so it always takes the community about three days. When more heroes join, the boss gains HP. When heroes drift away, it shrinks but keeps its share of health, so a quiet week never leaves it unbeatable.
+- **Shared reward.** Everyone who struck a fallen boss can claim it once: gold and XP that grow with every day you joined, a rare-or-better drop, and a gilded or ancient chest.
+
+**Live vs practice.** With Firebase sign-in the fight is shared through one Firestore document, `ck_worldBoss/current`. Firestore refuses until you add the rules in `firestore.rules.calorieknight` to the project. Until then, or offline, or with demo sign-in, the app falls back to a practice fight on the device alongside fictional heroes. The World Boss card says which mode you're in. After pulling, run `flutter pub get` (this adds `cloud_firestore`).
+
+## Balance
+
+`dart run tool/balance.dart` plays 12 long runs (200 days) per class with an auto-player: mostly balanced days with some lean, hearty and overfed ones. It equips upgrades, buys armour and potions, takes most quests and sometimes tries its luck pickpocketing. The current tuning comes out at:
+
+| | Knight | Ranger | Mage |
+|---|---|---|---|
+| Days per regular foe (early → late realms) | 0.9 → 1.2 | 0.8 → 1.1 | 0.8 → 1.1 |
+| Days per road boss | 2.5 | 2.4 | 2.3 |
+| Level at day 100 / 200 | 41 / 61 | 42 / 62 | 43 / 63 |
+| Gold on hand at day 100 | ~13k | ~14k | ~19k |
+| Foe counters per day | ~50 HP | ~58 HP | ~77 HP (no plate) |
+| Falls at the Inn | never on mostly-balanced habits | | |
+| Legendaries per 200 days | ~27 (1 every ~7 days) | ~26 | ~31 |
+| Special encounters per 200 days | ~28 rare/giant, ~22 quests, ~18 thefts, ~80 chests | | |
+
+Eating habits matter but never punish: with only 30% balanced days (the rest lean, hearty or overfed, with more treats), heroes progress about 15% slower (level ~57 at day 200) and still never fall.
+
+How it's kept in check:
+
+- **Foe toughness** grows with the realm (+12% each) and with your level (up to +90%, matching the gear you'd usually carry). Gear, crits and companions speed you up, but a regular foe still takes about a day.
+- **Crit chance is capped at 45%.** Rangers get +10% from their class.
+- **Legendary odds are kept low** on regular drops (1%), bosses (6%), rare foes (4–8%), chests (2–6%) and quests (1–10%). Boss trinkets, rune weapons and quest weapons are the planned exceptions; signature (quest and rune) weapons roll a quarter stronger with a third stat, so they beat a typical legendary when they drop.
+- **Sell values and chest gold are moderate**, so the enchanter (40 + 8 × level a roll) stays a meaningful choice. Potions and special ammo scale with level. Potions heal 40 + 3 × level.
+- **Foe counters** grow with realm and level (3 + 2.5 × realm + 0.7 × level, before armour). The Inn heals 10 (+10 on balanced days) + level / 3 + regen.
+
+## What's on the plate
+
+Every full swing is graded by the food you logged:
+
+| Grade | Swing | What counts |
+|---|---|---|
+| **Wholesome** | +15% | Fruit, vegetables, pulses (lentils, beans, chickpeas), tofu and tempeh, whole grains and porridge, nuts and seeds, soups and stir-fries, or anything with plenty of protein for its calories (4.5 g per 100 kcal or more) |
+| Everyday | normal | Everything else |
+| **Treat** | −20% | Anything tagged fast food, sweets or ale |
+
+- A treat still strikes: logging is never punished, it just matters what's on the plate.
+- A meal of several foods blends their grades by calories.
+- Fizzy drinks, crisps and deep-fried foods never count as wholesome, whatever else the name says.
+- Wholesome foods get a green **Wholesome** chip in your rations and journal, and the swing summary shows "wholesome +15%" or "treat −20%". The off-hand strike follows the same grade.
+- Foe HP is set so a day of wholesome food fells a common foe at the Inn; everyday and treat-heavy days take a little longer.
+
+## The foe's turn
+
+Combat runs in turns. Logging a meal is your turn; then, if the foe is still standing, it **hits back**.
+
+- The counter grows with the realm and your level, hits harder from bosses and rare foes, and is softened by armour and guard.
+- When the foe swings, luck decides in order:
+  - **Dodge** (18%, rangers 28%): it misses.
+  - **Parry**: you deflect it and riposte for half a full swing. Knights 12%, rangers 8%, mages 6%, plus half your crit.
+  - **Block**: you stop most of it, and all of it with a shield. Knights 15%, mages 10% (a ward), rangers 6%, plus 15% with a shield and half your guard.
+  - Otherwise it hits.
+- **Your meal sets your stance:** 20 g of protein or more gives +15% block. Staying within today's allowance gives +10% parry; going over gives −8%. Fast food or sweets give −5% parry. The battle screen shows your stance after each strike.
+- Thorns gear strikes the foe whenever it hits you.
+- A counter never takes you below 1 HP (only the night can fell you), and Peaceful mode turns counters off.
+- Weak swings after the sixth log draw no counter, so logging every bite is never punished.
+- The Inn mends a little more each level to keep pace, and the camp card shows roughly how hard the current foe hits.
+
+## Off-hands
+
+What you can hold in your other hand depends on your weapon.
+
+| Weapon | Off-hand |
+|---|---|
+| Daggers, short swords, scimitars | Shields, or an off-hand dagger (**dual wield**) |
+| Longswords, axes, maces | Shields |
+| Wands and sceptres | Spellbooks and orbs, or a second wand (**dual wield**) |
+| Crossbows and hand crossbows | Hand crossbows (**dual wield**) |
+| Bows | Quivers |
+| Chakrams, throwing knives, hand cannons | Parrying daggers / main-gauche |
+| Greatswords, polearms, warhammers, staves, cannons | Nothing (two-handed) |
+
+**Dual wielding.** A second weapon in the off hand strikes after every full swing for 8% of it (even when the main blow misses) and shows its own hit on the stage. Knights with twin blades also parry 3% more. The price is the shield or tome: no shield block, no guard from it, and no spellbook elements. Off-hand daggers (off-hand dirk, parrying dagger, main-gauche) and off-hand wands (plain, ember, rime) drop as loot; rangers can also find one-handed hand crossbows (quick to aim, +8% crit) to carry a pair.
+
+**Two-handed weapons** get both hands behind the blow: their damage stat counts 60% extra (bows 40%, staves 25%, since spells already multiply a mage's swing).
+
+How the kits compare in one balanced day at level 30 (`dart run tool/loadouts.dart`):
+
+| Kit | Damage | Counters taken |
+|---|---|---|
+| Knight: longsword + kite shield | 1,017 | 46 |
+| Knight: twin daggers | 1,217 | 63 |
+| Knight: greatsword | 1,227 | 74 |
+| Mage: wand + tome | 1,400 | 89 |
+| Mage: twin wands | 1,424 | 87 |
+| Mage: staff | 1,341 | 90 |
+| Ranger: crossbow + hand crossbow | 1,426 | 68 |
+| Ranger: twin hand crossbows | 1,351 | 67 |
+| Ranger: longbow + quiver | 1,362 | 70 |
+
+Sword and board is the safe choice; twin blades and big two-handers hit about a fifth harder and take more back.
+
+A mismatched off-hand stays in your kit but does nothing (it isn't drawn, adds no stats and gives no shield block) until you switch back to a weapon it suits. Item details say what pairs with what and warn before you equip something that won't be used. Off-hand drops usually (75%) suit the weapon you're holding.
+
+## Special ammunition (rangers)
+
+The merchant sells bundles of 10 shots in five kinds, named for your weapon:
+
+| Kind | Bows | Crossbows | Chakrams | Throwing knives |
+|---|---|---|---|---|
+| Poison | Poisoned arrows | Poisoned bolts | Venom-edged chakrams | Envenomed knives |
+| Fire | Burning arrows | Burning bolts | Flame-edged chakrams | Burning knives |
+| Frost | Frost arrows | Frost bolts | Frost-edged chakrams | Frost knives |
+| Barbed | Barbed arrows | Barbed bolts | Serrated chakrams | Serrated knives |
+| Blessed | Blessed arrows | Blessed bolts | Blessed chakrams | Blessed knives |
+
+- Each full swing spends one shot of the loaded kind and adds 3 + 1.2 × your level of its element. Barbed adds plain damage; blessed holy fire hurts any foe; fire burns ents twice as hard.
+- Weak swings after the sixth log don't spend any. Owning several kinds is fine; load one at the merchant.
+- Shots glow in their colour and leave a trail. A badge shows what's loaded and how many are left.
+- Rangers also find bundles in 35% of treasure chests. Hand cannons don't use special ammunition.
+
+## Enchantments
+
+The merchant's **enchanter** works a random rune onto your weapon or armour for 40 + 8 × your level in gold.
+
+- Each rune is tier I (60%), II (30%) or III (10%, "a perfect rune"). The tier sets its strength.
+- You see the new rune next to your current one and choose which to keep. The gold is spent either way, so rerolling is a gamble.
+- Weapon runes: Flametongue (fire), Venomfang (poison), Frostbite (frost), Holy Light, Keen Edge (crit), Vampiric (lifesteal), Might (damage), Serration (bleed), Wyrmslayer (dragon fire), Riposte (parry chance).
+- Armour runes: Warding (guard), Vitality (max HP), Renewal (regen), Thornmail (thorns), Fleetfoot (dodge chance), Steadfast (block chance), Prosperity (gold), the Sage (XP).
+- Elemental weapon runes make the weapon glow. Armour runes stay when you upgrade your armour tier.
+- 15% of rare-or-better weapon drops come already enchanted.
+- **Scrolls of enchanting** drop now and then (3% of kills, 15% from bosses and rare foes; one also comes with the daily gift). Reading one at the enchanter works a rune for free.
+
+## Mage spells
+
+Mages gather 1 mana on every full swing (up to 5). When there's enough for the **prepared spell**, it casts by itself on that swing. Spells unlock as you level; prepare one in the spellbook on the Hero page.
+
+| Level | Spell | Mana | Effect |
+|---|---|---|---|
+| 1 | Arcane Bolt | 2 | 1.8x damage |
+| 2 | Hex of Sloth | 2 | Half the foe's counters miss for 4 swings |
+| 3 | Summon Undead | 3 | A skeleton warrior fights beside you for 4 swings |
+| 4 | Enfeeble | 2 | The foe's counters hit 40% softer for 4 swings |
+| 5 | Frost Nova | 3 | 1.5x damage plus frost; the foe is frozen and can't hit back |
+| 6 | Bloodleech Bolt | 3 | 1.5x damage, and you heal a third of it |
+| 7 | Arcane Ward | 3 | Absorbs the next 3 counters |
+| 8 | Sunder Armour | 3 | Your hits deal 25% more for 4 swings |
+| 9 | Summon Dragonfire | 5 | A dragon swoops in and breathes a fireball: 2.2x damage plus fire |
+| 10 | Slumber | 3 | The foe sleeps through its next 3 blows. Bosses and giants shake it off after 1 |
+| 11 | Spectral Charge | 3 | A ghostly warhorse thunders out of the mist and tramples the foe: double damage |
+| 12 | Chain Lightning | 4 | Lightning leaps three times: 2.2x damage |
+| 13 | Mirror Ward | 3 | A shimmering mirror for the next 3 blows: you take half, and the foe takes the whole blow back |
+| 15 | Raise the Horde | 5 | Three skeletons fight for 3 swings |
+| 18 | Life Drain | 4 | 1.8x damage, and you heal half of it |
+| 20 | Healing Light | 3 | Always ready (never prepared): when you swing at under half health, golden light mends 30% of it. Once a day |
+
+Summoned skeletons stand beside you on the battlefield and strike after each of your blows; they crumble when their time is up or at the end of the day.
+
+**Healing Light** comes late on purpose, around the Elderwood, when foes start hitting hard. It casts by itself before your prepared spell, but only when you're under half health, only once a day, and it spends 3 mana that would have gone on an attack. In the balance runs it raises a mage's lowest HP from about 25 to about 55 without changing how fast they kill.
+
+## Bone gear (from the undead)
+
+Zombies, skeletons, the Bone Colossus and every other undead foe can leave bone gear: 8% of the time, 30% from an undead boss (half again from rare ones). You get armour first if you don't have it, otherwise usually a weapon.
+
+| | Knight | Mage | Ranger |
+|---|---|---|---|
+| Armour (42%, drop-only) | Bone-plate armour | Bonewoven robe | Bone-scale jerkin |
+| Weapon (epic, holy fire) | Bone cleaver | Ossuary staff (your raised dead fight one swing longer) | Bone bow |
+
+- Bone armour sits just above the best shop armour (40%), and **undead counters hit 25% softer** while you wear it.
+- Bone weapons carry holy fire, which only burns the undead and demons.
+- They're drawn in pale ivory bone.
+
+## The fisherman and the Kraken
+
+About one quest offer in eight is an old fisherman in a yellow oilskin with his rod: something in the bay takes boats whole. Accept and you fight on the shore against **the Kraken**, a giant boss with arms like ship's masts. Fire sputters against it (half burn). Win and he gives you his best catch (+30 HP), and the Kraken's hoard holds:
+
+- **Poseidon's own weapon** (30%, if you haven't got it): legendary, two stats a quarter stronger plus a third.
+  - **Poseidon's Trident** (knight and mage). Every 4th full swing it calls either a **Tidal Wave** (a wall of seawater rises behind you and breaks over the foe: 2.8x damage plus frost) or the **Kraken itself** (three arms burst from the ground and crush the foe: triple damage).
+  - **Poseidon's Bow** (ranger): **Tidecaller Volley**, arrows riding a breaking wave (2.5x damage plus frost).
+- Otherwise often (60%) a sea-forged prize:
+  - **Fisherman's Hook** (knight, a one-handed gaff with the Reel 'Em In special: double damage, always critical, 30 gold).
+  - **Pearl of the Deep** (mage off-hand orb: frost, wisdom, mending).
+  - **Harpoon crossbow** (ranger, Reel 'Em In).
+
+## Wild encounters and their bosses
+
+Now and then after a victory (6%), something wild steps out of the realm instead of the next foe. Beat it and its boss may come for you (25%), while the regular foe waits with its wounds.
+
+| Realm | Wild foes | Bosses that may follow |
+|---|---|---|
+| Greywood Road | Grey Wolf, Giant Spider | Fenrir the Alpha Wolf, the Spider Queen |
+| Ashen Hills | Ghost, Banshee, Ghoul, wolves | the Wailing Queen, the Ghoul King |
+| Elderwood | Brown Bear, Wild Unicorn, Centaur, Witch, spiders | Ursa the Cave Bear, the Moonhorn, the Centaur Warchief, the Coven Mother |
+| Orkmarch and the Peaks | Minotaur, Warlock, centaurs, witches, bears | the Minotaur Lord, Malgrim the Unholy |
+
+- **Spirits** (ghosts, banshees, the Wailing Queen) are undead and see-through, and float on a trailing wisp. Steel and arrows pass half through them; holy fire burns them double; a mage's magic doesn't care.
+- **Spiders** shrug off poison completely.
+- **Ghouls** and **spirits** are undead, so they can drop bone gear, and holy fire works on them.
+- **Art:** wolves use the hound art; bears, spiders, unicorns and centaurs (a bow-wielding rider on a horse's body) have their own. Witches have hooked noses and crooked hats, warlocks have deep hoods with burning eyes (Malgrim's is a skull), and minotaurs have bull heads, nose rings and great axes.
+- Each foe fights on a fitting battleground: graveyards, crypts, swamps, ruins, the heartgrove and more.
+
+### Packs
+
+About a third of wild encounters are a **pack** of three: a Wolf Pack or Goblin War Band on the Greywood Road, a Skeleton Horde or Ghoul Pack in the Ashen Hills, a Spider Brood in the Elderwood, and Ork War Bands further on. They have a rare foe's health. Each class has a way to hit all three at once for **+50%**:
+
+- **Knights:** sweeping weapons (halberds, poleaxes, glaives, battleaxes and greataxes).
+- **Mages:** area spells (Frost Nova, Chain Lightning, Summon Dragonfire, Spectral Charge).
+- **Rangers:** special arrows (fire, barbed and the rest).
+- **Everyone:** special attacks (quest weapons, Arrow Rain, Mighty Cleave, Arcane Storm).
+
+## Mounts
+
+Ride a mount and **the first full strike of each day opens with a Charge**. Your hero gallops across the field on horseback, runs the foe down and wheels back, before the blow.
+
+| Mount | Charge | Where |
+|---|---|---|
+| Sturdy pony | 30% of a full swing | Merchant, 180 gold |
+| Warhorse (barded destrier) | 50% | Merchant, 700 gold |
+| Unicorn | 55%, and its horn mends 8% of your health | The Moonhorn (35%) |
+| Nightmare (burning mane and hooves) | 60%, and the foe burns | Malgrim the Unholy (35%) |
+| Tamed wyvern | 65% (it swoops from the sky) | Wyverns (8%) |
+
+- **Choosing:** a new mount you win or buy is ridden at once if it charges harder. Change mounts (or walk) in the **Stable** on the hero page.
+- **Balance:** in the balance runs a mount adds about 5% to how fast foes fall.
+- **Spectral Charge:** mages also get Spectral Charge (level 11), where a ghostly warhorse tramples the foe.
+
+## Gloves, boots and rings
+
+Gear now fills eight places: weapon, off-hand, head, **hands**, **feet**, **ring**, trinket and armour. Gloves and boots are kept per class, like helms. The ring, like the trinket, is worn whatever your class.
+
+| Slot | Knight | Mage | Ranger | Enchantments it can roll |
+|---|---|---|---|---|
+| Hands | Gauntlets (damage, guard or crit) | Spellgloves (fire, frost, wisdom) | Bracers (crit, damage, dodge) | damage, elements, bleed, crit, lifesteal, parry, dodge, fortune |
+| Feet | Sabatons and greaves (guard, vigour) | Slippers and sandals (regen, vigour) | Boots (dodge, fortune) | guard, vigour, regen, thorns, dodge, block, fortune |
+| Ring | any class: band, signet, ember, frost, venom, bloodstone, lucky or sage's ring | | | damage, elements, holy, crit, lifesteal, regen, parry, fortune, wisdom, dragonkin |
+
+- Gloves, boots and rings are accessories, so their enchantments roll a little smaller than a weapon's.
+- On the hero, gauntlets and sabatons show in their metal, and spellgloves, bracers and boots in silk or leather.
+- New legendaries: Gauntlets of the Berserker, Spellweaver's Gloves, Fletcher's Grips, Windwalker Boots, Ironshod Sabatons, Treads of the Hearth, the Ring of the Phoenix, the Band of the Duellist and the Bloodstone Signet. The Ring of the Greywood is now a ring.
+
+**Gear sets.** A rare-or-better pair of gloves, boots or a ring sometimes (25%) belongs to a set, named for it ("Embersworn gauntlets"). Wear two pieces for the first bonus and all three for the second as well. Each set steers a build:
+
+| Set | 2 pieces | All 3 |
+|---|---|---|
+| Embersworn | +6 fire per full swing | +10 more fire and +5% crit (fire build) |
+| Bloodbound | heal 4% of your damage | heal 6% more, plus 6 per swing (lifesteal build) |
+| Windrunner | +5% dodge | +5% more dodge and +8% crit (quick and deadly) |
+| Bulwark | +5% block | +5% more block, +5% guard and thorns (a wall) |
+| Arcanist (mages only) | +20% XP and +3% crit | every spell costs 1 less mana |
+
+The hero page shows the sets you're wearing and what the next piece would add.
+
+**At the merchant:** **Cobbler's boots** (a plain pair for empty feet) and the **Jeweller's box**, a ring you can't see until it's open: uncommon to epic, now and then legendary or part of a set. The old gauntlets purchase stays as a kit upgrade (+3 damage per swing) on top of whatever gloves you wear.
+
+To keep the balance with three more slots, foes grow a little tougher with level (toughness now reaches +115% at about level 33) and hit a little harder (0.8 per level).
+
+## Capes
+
+Bosses and rare foes sometimes (12%) leave a **cape** for your class. It's worn over your armour in its own colour, carries one small stat, and has a class ability:
+
+| Class | Cape | Ability |
+|---|---|---|
+| Knight | Bannerlord's cloak (crimson) | **Rally:** once a day, when a blow leaves you under 30% health, you recover 25% |
+| Knight | Crusader's mantle (white) | **Vanguard:** the first blow struck at you each day glances off |
+| Mage | Cloak of the Wellspring (blue) | **Wellspring:** wake each morning with 1 mana already gathered |
+| Mage | Starweave cloak (violet) | **Starweave:** your spells hit 30% harder |
+| Ranger | Hunter's cloak (green) | **First Shot:** your first full strike each day is always a critical hit |
+| Ranger | Shadow cloak (black) | **Shadowstep:** when you dodge, you strike back from the shadows |
+
+Capes are epic, now and then "Exalted" (legendary, with a stronger stat). The hero page shows your cape's ability.
+
+## Knight armour variants
+
+Besides the merchant's chainmail and plate, knights sometimes find a suit in battle (2.5%, 8% from bosses and rare foes). Each has its own look and a small perk:
+
+| Variant | Protection | Perk | Found from |
+|---|---|---|---|
+| Riveted mail | 16% | +3% parry | any level |
+| Scale mail (bronze scales) | 18% | thorns 8 | any level |
+| Blackened plate | 30% | +4% block | level 10 |
+| Fluted plate | 32% | +3% crit | level 10 |
+| Crusader plate | 32% | +4% guard | level 10 |
+| Mithril mail | 38% | +6% dodge | level 22 |
+| Obsidian plate | 43% | +5% block | level 22 |
+
+Wearing a variant never stops you buying a better shop tier.
+
+## Mirror Ward and reflecting damage
+
+**Mirror Ward** (mage, level 13, 3 mana) raises a mirror for the next 3 blows: each one hurts you half as much, and the foe takes the whole blow back (shown as a pale bolt flying back at it). Other ways to turn damage back: thorns (Bulwark set, scale mail, thorned shields) and the Shadow cloak's Shadowstep.
+
+**Balance:** knights now hit a little harder (3 + level ÷ 5 bonus damage), so their defensive capes don't leave them behind; the three classes stay within about 10% of each other.
+
+## Deeds: challenges, streaks and friends
+
+The **Deeds** card on the hero page tracks goals that unlock gear found nowhere else (it arrives in your spoils). Progress is counted when you rest at the Inn.
+
+| Deed | Goal | Reward |
+|---|---|---|
+| Rainbow Plate | 5 different fruits and vegetables in one day | a Harvest weapon: Orchard Blade, Staff of the Green Year or Wildroot Bow (legendary) |
+| Strong Start | 5 days that begin with a wholesome breakfast | the Dawnwarden helm, circlet or hood |
+| Plant Power | 5 days with protein at least 20% of your calories | Verdant armour (36%, mends 8 HP each night) |
+| Wide Pantry | 30 different wholesome foods | the Seedheart Amulet |
+| Three Good Days | a 3-day healthy streak | Steadfast gloves |
+| A Good Week | a 7-day streak | Wayfarer's boots |
+| Fourteen Dawns | a 14-day streak | the Band of Fourteen Dawns |
+| The Oath | a 30-day streak | an Oathbound weapon with the **Unbroken Oath** special (triple damage plus holy fire) |
+| The Long Road | a 60-day streak | Oathbound armour (46%, the best there is) |
+| A Hundred Days | a 100-day streak | the Heart of the Hundred Days |
+| Fellowship | a friend joins from your invite | the **Twinbound Band**, for you *and* your friend |
+| A Company of Heroes | 3 friends join | the **Banner of Fellowship**, a cape that doubles your friends' cheers |
+
+**The healthy streak never punishes eating:** balanced and lean days add to it; hearty and overfed days only pause it. A day with nothing logged, or a starving day, starts it again, so the game never rewards eating too little. Your best streak is kept, so a reset never takes away a deed you've already earned.
+
+**Invites:** your invite link is on the profile page. A new player can enter your username or link under "Did a friend invite you?": you become friends and they get the Twinbound Band at once. In practice mode that's all on the device. For the live service, record each join in `ck_referrals/{inviterUid}` (a list of new players' uids, written by the joining player and readable only by the inviter); `FriendsService.takeReferrals()` reads and clears it, and the inviter's Twinbound Band (and, at three, the Banner) is handed out on their next load.
+
+## How the art is drawn
+
+Everything is drawn in code (Flutter `CustomPainter`), no image files.
+
+- **Limbs are one piece.** Arms, legs and beast legs go through `limb()` in `paint_kit.dart`: all the outlines first, then the fills on top, so no seam shows at an elbow or knee. A soft crease marks each bend.
+- **Hands and feet.** Hands are fists with knuckles and a thumb, turned to follow the forearm. Feet are boots with a heel, sole and cuff, except that skeletons and ghouls go barefoot, ents stand on roots, demons, gargoyles and cyclopes have clawed feet, and minotaurs have hooves.
+- **Plate joints** are domed poleyns and couters with a fan wing, not round balls.
+- **Four-legged beasts** grow their near legs out from under the body: the legs are drawn, then the body's fill is laid back over their tops, so no joint shows. Hounds have a deep chest, a tucked waist, a neck that's part of the body and hind legs that bend back at the hock. Horses (and unicorns, centaurs and every mount) have heavy upper legs, hocks, knees and a fuller chest and rump. Dragons stand on jointed, clawed legs.
+
+## Bloodleech
+
+Bloodleech heals you for a share of the damage you deal on full swings, shown as a crimson stream flowing back to your hero.
+
+- **Bloodleech weapons:** 12% of epic and legendary weapon drops, for every class, melee or ranged. They're named "Bloodleech …", tinted crimson, and heal 10–17% of each hit.
+- **Bloodleech rune:** a weapon rune from the enchanter, about 2–8% depending on tier.
+- **Bloodleech ammunition:** arrows, bolts, chakrams or knives that heal 15% of each shot (45 gold for 10).
+- **Bloodleech Bolt:** a mage spell at level 6 (3 mana): 1.5× damage, and you heal a third of it. Life Drain at level 18 heals half.
+- Weapon and rune leech together cap at 25% of each hit. Bloodleech ammo can push past the cap for that one shot.
+
+## Hit variety and rarity
+
+- **Every full swing has a range of outcomes:**
+  - **Miss** (5%, more when ale-addled).
+  - **Graze** (10%, half damage).
+  - A normal hit.
+  - **Critical** (2x, or 2.5x with a legendary weapon).
+  - Now and then a **devastating** crit, half again harder.
+  - Specials and spells always land.
+- **Crit chance** adds a weapon's own: by kind (daggers and throwing knives +8%, crossbows +6%, scimitars, short swords and chakrams +5%, bows, longswords, spears and wands +3%, heavy weapons +1%) and by rarity (uncommon +2%, rare +4%, epic +7%, legendary +10%). Rarer weapons also roll higher damage.
+- **Rarity colours** follow the familiar loot-game scheme: common grey, uncommon green, rare blue, epic purple, legendary orange.
+  - Equipped weapons glow softly in their rarity colour.
+  - Drops shoot up a loot beam of their colour, brighter for rarer items.
+  - The drop label and item names use the colour too.
+
+## Companions
+
+One companion fights beside you at a time. Choose it under Companions on the Hero page. The one that fights grows with the XP you earn.
+
+| Companion | How to get it | Stages | What it does |
+|---|---|---|---|
+| Dragon | Dragon egg (merchant, or from dragons) | Egg, Hatchling, Drake, Elder dragon | Fire breath every swing (boosted by dragonkin gear) |
+| **Hellhound** | 10% from the Obsidian Dragon (25% from its rare variants), 12% from any Blazing rare foe | Pup, Hellhound (300 XP), Alpha (1000), Hound of the Pit (2500) | Bites every swing; adds fire to full swings; from Alpha up, 15% of the time it leaps in front of the foe's counter |
+| **Wolf** | Merchant, 150 gold | Pup, Timber wolf, Dire wolf, Moonfang | Bites every swing; adds crit chance (up to +8%) |
+
+Hounds sit at your heel, sprint across to bite, and lope back. The hellhound has a burning mane, ember-cracked hide and a flaming tail.
+
+### The Demon Hound (boss)
+
+**Gharmok the Demon Hound** is a giant hellhound with crimson hide, curling horns, bone spines, a spiked collar and a burning mane.
+
+- **When it appears:** each time you fell the Obsidian Dragon there's a 25% chance it bursts from the ground to avenge its master, before the next foe. It fights on the volcano and takes about four balanced days to bring down.
+- **What it drops:** it always leaves a **hellhound pup** if you don't have one. There's a 35% chance of the **Collar of the Pit**, a legendary trinket with fire, thorns and dodge. It also drops rare-foe loot and a chest.
+- **World Boss:** it's also in the World Boss rotation as *Gharmok, Father of Hounds*.
+
+### The Cyclops (boss)
+
+**Gorvoth the Cyclops** is a one-eyed giant with a stubby horn, tusks, a blinking great eye and a spiked club.
+
+- **When it appears:** each time you fell the Goblin Warchief (Ashen Hills) there's a 25% chance the goblins' master lumbers out of its cave.
+- **How it fights:** with one eye and no depth perception it hits 30% harder, but your dodge chance against it is +15%.
+- **What it drops:** a 35% chance of the **Eye of the Cyclops**, a legendary amulet with crit, parry and XP. It also drops rare-foe loot and a chest.
+- **World Boss:** it's also in the World Boss rotation as *Gorvoth the Mountain-Eye*.
+
+### The Bone Colossus and the Ork Behemoth (bosses)
+
+- **The Bone Colossus:** a towering skeleton in horned, rusted plate with a ghost-lit greatsword. Each time you fell the Skeleton Champion (Orkmarch) there's a 25% chance it rises in the crypt. It's undead, so holy damage hurts it. 35% chance of the **Bone Phylactery**: max HP, nightly regen and block chance.
+- **Krugmar the Ork Behemoth:** Grushnak's giant elder brother in black plate with a burning greataxe. Each time you fell Grushnak there's a 30% chance he answers the war horns. He has 15% extra HP. 35% chance of the **Behemoth's War Horn**: damage, crit and gold.
+- Both drop rare-foe loot and a chest, and both are in the World Boss rotation.
+
+### Gargoyles
+
+Winged stone demons with horns, fangs, glowing eyes and cracked, lichen-flecked hide.
+
+- **Gargoyle:** after a victory in the Ashen Hills or the Elderwood there's a 7% chance one drops from the castle walls. It pays like a rare foe.
+- **The Gargoyle Matriarch:** each time you fell the Black Rose Commander there's a 30% chance she spreads her wings from the castle spire. She's bigger and darker with fiery eyes, and has a 35% chance of dropping the **Gargoyle Heart** (guard, thorns, block).
+- **Stone skin:** blades and arrows glance off for 60% damage. Blunt weapons (mace, morning star, warhammer, clubs, Heartwood maul) crush for 150%. Mages' spells, and all elemental damage, hit normally.
+
+### Demons
+
+Red-hided demons with great curling horns, burning eyes, a goatee, fangs and a barbed tail.
+
+- **Pit Demon:** after a victory in the Orkmarch or the Wyrmspine Peaks there's a 6% chance one claws out of the ground. It carries a spear and pays like a rare foe.
+- **Azgaroth the Demon Lord:** the endgame boss. When you fell Vorthax the Elder Wyrm there's a 40% chance the mountain splits open and the Demon Lord steps through. He's a winged giant with a flaming greatsword and 20% extra HP. 40% chance of the **Infernal Sigil** (damage, bloodleech, crit). He's also a World Boss.
+- **Demon traits:** holy damage burns demons like the undead, and fire does nothing to them. Fire builds need a plan B: blessed arrows, Holy Light, Sunder Armour or Runic Surge.
+
+## Rune-engraved weapons
+
+The **Dragonbone Warden** (Wyrmspine Peaks) guards the rune-forges. Each time you fell it there's a 6% chance it drops a rune-engraved weapon for your class (18% from its rare and named variants). Nothing else drops them.
+
+| Class | Weapon | Bound rune |
+|---|---|---|
+| Knight | Rune-engraved sword (one-handed: takes a shield) | Might III |
+| Ranger | Rune-engraved bow (takes quivers and special arrows) | Keen Edge III |
+| Mage | Rune-engraved staff (two-handed) | Holy Light III |
+
+All three are legendary, in pale runesteel with glowing glyphs along the blade, limbs or staff, and +6% crit (+4% for the staff) on top of their rarity. They carry the **Runic Surge** special: every 4th full swing, 2.5× damage plus holy fire. They sell for double.
+
+## Mage hexes
+
+| Level | Spell | Mana | Effect (4 swings) |
+|---|---|---|---|
+| 2 | Hex of Sloth | 2 | Half the foe's counters miss (lowers attack speed) |
+| 4 | Enfeeble | 2 | The foe's counters hit 40% softer (lowers attack power) |
+| 8 | Sunder Armour | 3 | Your hits deal 25% more (weakens defence) |
+
+Hexes show under the foe's health bar, wear off one full swing at a time, and lift when the foe falls.
+
+## Rare encounters and treasure chests
+
+- After a regular kill there is a 9% chance a rare foe steps onto the road before the next one (never right before a realm boss). It is an aura variant of one of the realm's foes (Gilded, Cursed, Blazing, Venomous, Frostbound or Ancient), or, about a third of the time, a named rare boss such as Grizzletooth the Goblin King or Rimefang.
+- Rare foes have 1.6x HP (named bosses 1.9x) and give 1.8x XP and gold (Gilded ones give far more gold). Their drop is mostly rare or epic, now and then legendary, carries their aura's affix, and they always leave a gilded or ancient chest. Beating one doesn't move you along the road.
+- Treasure chests (wooden, iron-bound, gilded, ancient) turn up after 8% of regular kills, and on 6% of balanced or lean days at the Inn. They hold gold, gear from tier-based rarity odds, and sometimes a potion.
 
 ## Loot
 
 Every defeated foe drops one piece of gear for your class (trinkets suit any class). There is no inventory: **equip** it (the piece it replaces is sold) or **sell** it. A drop you haven't decided on waits at camp.
 
 - **Rarity:** common, uncommon, rare, epic, legendary (bosses always drop rare or better). Higher rarity means bigger numbers and more enchantments.
+- **Materials:** weapons come in six tiers that improve with your level, each a little stronger and a different colour. Metal (knight blades and axes, ranger daggers): Bronze, Iron, Steel, Silver, Gold, Platinum. Wood (bows, staves, wands): Ash, Oak, Yew, Elder, Silverbark, Goldenwood. The item card shows "Material: Gold, tier 5 of 6". Sometimes a drop is a band better (or worse) than your level. Armour already has its own tiers in the shop.
+- **Mage masks:** mage helms include the Moon mask (wisdom), Sun mask (crit) and Porcelain mask (regeneration), drawn as a glowing-eyed mask over the face.
+- **Quivers:** rangers' quivers (off-hand) come as the Quiver, Long quiver and Hunter's quiver (crit). Two legendaries, the Stormfeather Quiver and the Quiver of the Endless Hunt, have a 1 in 3 chance not to use up a special arrow.
+- **Bleed:** weapons with the Serrated affix (or a Serration rune) make the foe bleed overnight.
+- **Legendary weapons carry their class's special attack**, charged over 4 full swings like quest weapons: knights get **Mighty Cleave**, mages **Arcane Storm** (bolts of magic rain down) and rangers **Arrow Rain** (a storm of arrows from the sky). All three hit for 2.2x and never miss, a little under the quest weapons' specials.
 - **Effects:** damage, poison, fire, frost, holy (against the undead), bleed (overnight), critical chance, life steal, guard, max HP, regeneration at the Inn, thorns, fortune (gold), wisdom (XP) and dragon fire.
 - **Named legendaries:** Oathkeeper, Dawnbreaker, Grimtooth, The Warden's Bulwark, Crown of the Fallen Rose, Emberheart, Rimefrost Sceptre, The Verdant Wand, Tome of Endless Pages, Circlet of Quiet Stars, Thornwhisper, Galeforce, Stinger, Quiver of the Hollow Moon, Mask of the Silent Wood, Amulet of the Hearth, Gambler's Coin, Wyrm's Eye Pendant, Locket of Second Wind and Ring of the Greywood.
 - Weapons glow with their element (poison green, fire orange, frost blue, holy gold); legendary gear sparkles.
@@ -68,7 +555,16 @@ The friends list is mocked on the device with a few fictional heroes until Fires
 - **View hero**: a friend's painted hero, gear and week. Friends never see meals or calories.
 - **Cheer**: once a day per friend. Each cheer you receive adds 5% damage until you rest (up to three).
 - **Hiscores**: ranked by balanced days this week, then streak. Never by calories.
+- **Call a friend to help**: once a day, a friend's hero runs onto the battlefield and strikes your foe for 60% of your full swing. It's the same however strong they are, so nobody is left out, and it never lands the killing blow (that's yours).
 - **Co-op raid**: one boss per week for the whole party. Every balanced or lean day at the Inn also strikes it for twice your finishing blow. Fell it and everyone who helped claims +120 XP, +150 gold and a rare-or-better drop.
+
+## Daily gift
+
+A gift waits at camp every day you open the game, on a seven-day calendar: gold, a potion, more gold, a scroll of enchanting, more gold, two potions, and on the seventh day a mystery chest (any tier, rolled like a victory chest). Gold scales with your level. Missing a day never resets the calendar; it simply waits for you.
+
+## Supporter's Pass (cosmetic only)
+
+A planned subscription that is **looks only**: five supporter dyes (Midnight, Amethyst, Gilded, Frostsilver, Ember), a golden crest and name on friends' and hiscore cards, and a thank-you in the credits. It never adds damage, loot, XP or gold, and the daily gift is the same for everyone. In the prototype the button just switches it on; the store isn't connected yet.
 
 ## How it's organised
 
@@ -81,18 +577,29 @@ The friends list is mocked on the device with a few fictional heroes until Fires
 | `test/` | Rules tests: one balanced day per common foe for every class, bosses take about three days, undereating never pays, the squire check, falling, loot (equip, sell, boss rarity), retraining, cheers, raids, old-save migration and save round-trips. |
 | `tool/simulate.dart` | `dart run tool/simulate.dart` plays 20 balanced days and prints when each foe falls. |
 
-## Connecting the real food engine
+## Logging food (The Calorie Card's engine)
 
-The prototype menu comes from `SampleFoodSearch`. To use the fatsecret-proxy, pass a `ProxyFoodSearch` where the controller is made (`_controllerFor` in `main.dart`):
+**Log rations** (the Strike button) is The Calorie Card's Add food flow, using the same fatsecret-proxy:
 
-```dart
-_game = GameController(
-  storage: GameStorage(accountId: a.id),
-  foodSearch: ProxyFoodSearch('https://<your-proxy>.onrender.com'),
-)..load();
+- **Type what you ate:** for example "2 crumpets, oat latte". Commas, semicolons and new lines separate foods. **Look up** resolves them a few at a time (`/food/resolve`), and each settles on screen as it arrives. A slow one shows the AI's quick estimate meanwhile (`/food/estimate`).
+- **Foods you've had before** come straight back with their numbers and need no lookup. A different amount is scaled from the last time: "10g peanut butter" after "40g peanut butter".
+- **Scan barcode** (`/food/barcode`) and **Photo of meal** (`/food/photo`) work as in The Calorie Card.
+- **Fixing a food:** tap it to change the amount (portions, g/oz or ml/fl oz) or its numbers. Corrected calories on a looked-up food are reported back (`/food/feedback`), the same as in The Calorie Card.
+- **Meals:** pick Breakfast, Lunch, Dinner or Snacks. You can save the foods you're logging as a meal, then log it again in one tap from Your meals. Add again offers the foods you log most at that meal.
+- **Log everything at once.** Add all you ate (a meal, or the whole day) and tap Log once. Each food is its own strike, and they play back to back as a **combo** without stopping: no windows in between. Spoils, the merchant and any quest or theft wait until the last strike. A foe that falls mid-combo is replaced by the next, and the rest of the strikes carry on into it.
+- **Combos play faster** the longer they are (1.3x for 2–3 foods, 1.6x for 4+), and **Skip ahead** plays the rest at 4x. The battle screen then sums it up: "Combo of 6 strikes: 412 damage · 2 critical · a foe defeated".
+- The first 6 strikes a day are full strength, however you group them, so logging as you go and logging it all in the evening come to the same.
+- **Status effects:** foods are tagged ale, fast food or sweets from their name. You can change the tag on any food.
+- **Food country** is in Settings and defaults to the device's region. It sets the sizes, brands and labels used for lookups.
+- **Camp menu:** a short built-in list that works offline.
+
+Copied from The Calorie Card: `food_resolver.dart`, `proxy_client.dart` and `portion_amount.dart`, plus the matching rules in `food_book.dart` (from `food_history.dart` and `usuals.dart`). Keep them in step when one app changes.
+
+**Sign-in matters here.** The proxy expects a Firebase ID token on every request. `main.dart` passes the signed-in player's token through `ProxyClient.tokenProvider`. With the device-only test sign-in there's no token, so lookups are refused and the screen says so ("Add my own" and the camp menu still work). When CalorieKnight is deployed to its own website, the proxy's CORS rules must allow that site, and Firebase's Authorised domains must list it. To point at a local proxy, run:
+
 ```
-
-Then match `ProxyFoodSearch.search` in `lib/services/food_search.dart` to the proxy's real endpoint and response shape. The easiest path is to copy The Calorie Card's existing client into it. `tagFromCategory` turns FatSecret categories into the ale, fast-food and sweets tags that drive the status effects.
+flutter run -d chrome --dart-define=PROXY_BASE_URL=http://localhost:3000
+```
 
 ## Connecting Firebase later
 

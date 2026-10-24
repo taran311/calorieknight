@@ -61,6 +61,38 @@ const realmThemes = <RealmTheme>[
     haze: Color(0x803A1E1A),
     mist: Color(0x21C46A3A),
   ),
+  // The Orkmarch: dusty badlands under a smoky green-gold sky, war-camp fires on the ridge.
+  RealmTheme(
+    sky: [Color(0xFF1C2018), Color(0xFF3E4A2C), Color(0xFF8A8A4A), Color(0xFFC8A860)],
+    glow: Color(0xFFE8C870),
+    mountains: Color(0xFF3A3A2A),
+    ridge: Color(0xFF2C2C20),
+    castle: Color(0xFF22221A),
+    hill: Color(0xFF34301E),
+    trees: Color(0xFF16160E),
+    ground: [Color(0xFF5A4E30), Color(0xFF2A2416)],
+    road: [Color(0xFF7A6646), Color(0xFF463A28)],
+    grass: Color(0xFF1A1A10),
+    mote: Color(0x99E8D08A),
+    haze: Color(0x66504A2A),
+    mist: Color(0x21D8C88A),
+  ),
+  // The Wyrmspine Peaks: jagged violet mountains above a lava-lit pass.
+  RealmTheme(
+    sky: [Color(0xFF0E0A18), Color(0xFF2A1A3A), Color(0xFF6A2A3A), Color(0xFFC0583A)],
+    glow: Color(0xFFFF8A4A),
+    mountains: Color(0xFF2A2234),
+    ridge: Color(0xFF1E1826),
+    castle: Color(0xFF16101C),
+    hill: Color(0xFF241C24),
+    trees: Color(0xFF0E0A0E),
+    ground: [Color(0xFF3A2E30), Color(0xFF161012)],
+    road: [Color(0xFF5E4A44), Color(0xFF2E2420)],
+    grass: Color(0xFF0E0A0A),
+    mote: Color(0xCCFF7A3A),
+    haze: Color(0x80301A2A),
+    mist: Color(0x21FF6A3A),
+  ),
 ];
 
 final Map<int, ui.Picture> _cache = {};
@@ -81,7 +113,7 @@ Paint _glow(Offset centre, double radius, Color colour, List<double> alphas, Lis
     Paint()..shader = ui.Gradient.radial(centre, radius, [for (final a in alphas) colour.withValues(alpha: a)], stops);
 
 void _paintRealm(Canvas c, int realm) {
-  final th = realmThemes[realm], r = SeededRandom(realm == 1 ? 77 : 31);
+  final th = realmThemes[realm], r = SeededRandom(const [31, 77, 19, 53][realm % 4]);
   c.drawRect(Offset.zero & sceneSize, _vertical(th.sky, 0, 540));
   final sun = realm == 1 ? const Offset(250, 300) : const Offset(300, 270);
   c.drawCircle(sun, 300, _glow(sun, 300, th.glow, const [.9, .5, 0], const [0, .2, 1]));

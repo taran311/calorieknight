@@ -1,6 +1,7 @@
 // Colours, type and the two surfaces the whole UI is built from: carved stone and parchment.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class Palette {
@@ -138,13 +139,31 @@ class Parchment extends StatelessWidget {
 enum ButtonTone { stone, blood, amber }
 
 /// A pressable stone block with a title and an optional caption.
-class StoneButton extends StatelessWidget {
+class StoneButton extends StatefulWidget {
   const StoneButton({super.key, required this.title, this.caption, this.onPressed, this.tone = ButtonTone.stone, this.compact = false});
   final String title;
   final String? caption;
   final VoidCallback? onPressed;
   final ButtonTone tone;
   final bool compact;
+
+  @override
+  State<StoneButton> createState() => _StoneButtonState();
+}
+
+class _StoneButtonState extends State<StoneButton> {
+  bool _down = false, _hover = false;
+
+  String get title => widget.title;
+  String? get caption => widget.caption;
+  VoidCallback? get onPressed => widget.onPressed;
+  ButtonTone get tone => widget.tone;
+  bool get compact => widget.compact;
+
+  void _tap() {
+    HapticFeedback.selectionClick();
+    onPressed?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +178,12 @@ class StoneButton extends StatelessWidget {
       ButtonTone.stone => Palette.cream,
     };
     final enabled = onPressed != null;
-    return Opacity(
+    // Pressed buttons sink a touch; hovered ones lift a shade lighter.
+    return AnimatedScale(
+      scale: _down && enabled ? .965 : 1,
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOut,
+      child: Opacity(
       opacity: enabled ? 1 : .5,
       child: Semantics(
         button: true,
@@ -167,10 +191,12 @@ class StoneButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onPressed,
+            onTap: enabled ? _tap : null,
+            onHighlightChanged: (v) => setState(() => _down = v),
+            onHover: (v) => setState(() => _hover = v),
             borderRadius: BorderRadius.circular(3),
             child: Ink(
-              decoration: stoneDecoration(fill: fill),
+              decoration: stoneDecoration(fill: _hover && enabled ? Color.lerp(fill, Colors.white, .08)! : fill),
               padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 6 : 11),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -193,6 +219,7 @@ class StoneButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -222,7 +249,15 @@ class Meter extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Text(trailing ?? '$value / $max', style: Txt.label(size: 13).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+            // The numbers count to their new value rather than jumping.
+            trailing != null
+                ? Text(trailing!, style: Txt.label(size: 13).copyWith(fontFeatures: const [FontFeature.tabularFigures()]))
+                : TweenAnimationBuilder<double>(
+                    tween: Tween(end: value.toDouble()),
+                    duration: const Duration(milliseconds: 450),
+                    curve: Curves.easeOut,
+                    builder: (_, v, __) => Text('${v.round()} / $max', style: Txt.label(size: 13).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                  ),
           ],
         ),
         const SizedBox(height: 3),

@@ -5,14 +5,19 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../services/food_search.dart';
+import '../services/food_book.dart';
+import '../services/food_country.dart';
 import '../services/friends.dart';
 import '../services/storage.dart';
+import '../services/world_boss_service.dart';
 import 'catalog.dart';
 import 'classes.dart';
 import 'engine.dart';
+import 'heists.dart';
 import 'loot.dart';
 import 'models.dart';
+import 'spells.dart';
+import 'world_boss.dart';
 
 sealed class StageEvent {}
 
@@ -34,6 +39,20 @@ class WakeEvent extends StageEvent {
 /// A new adventure started: the stage drops any animation still playing.
 class ResetEvent extends StageEvent {}
 
+/// A quest foe steps onto the road.
+class QuestEvent extends StageEvent {
+  QuestEvent(this.foe, this.banner);
+  final FoeType foe;
+  final String banner;
+}
+
+/// A friend's hero runs in and strikes the foe.
+class AidEvent extends StageEvent {
+  AidEvent(this.friend, this.damage);
+  final HeroCard friend;
+  final int damage;
+}
+
 class KillEvent extends StageEvent {
   KillEvent(this.kill);
   final KillResult kill;
@@ -42,12 +61,17 @@ class KillEvent extends StageEvent {
 enum JournalTab { rations, log }
 
 class GameController extends ChangeNotifier {
-  GameController({GameStorage? storage, FoodSearch? foodSearch, this.friends})
+  GameController({GameStorage? storage, FoodBook? foodBook, this.friends, this.world})
     : storage = storage ?? GameStorage(),
-      foodSearch = foodSearch ?? SampleFoodSearch();
+      foodBook = foodBook ?? FoodBook(accountId: 'local');
 
   final GameStorage storage;
-  final FoodSearch foodSearch;
+
+  /// Foods logged before and saved meals, for one-tap logging.
+  final FoodBook foodBook;
+
+  /// The World Boss every hero fights together. Null in tests.
+  final WorldBossService? world;
 
   /// Friends, cheers and raids. Null in tests.
   final FriendsService? friends;
@@ -64,8 +88,17 @@ class GameController extends ChangeNotifier {
   /// The foe the stage is showing. Lags behind the engine during a kill so the old foe can fall.
   int shownFoe = 0;
 
+  /// The rare encounter the stage is showing, if any (lags like [shownFoe]).
+  Rare? shownRare;
+
+  /// The foe the stage is showing, rare variants included.
+  FoeType get shownFoeType => encounterType(shownFoe, shownRare);
+
   /// Foe HP as the player sees it: drops when the blade lands, not when the button is tapped.
   int shownFoeHp = 0, shownFoeMax = 1;
+
+  /// The most recent strike, for the battle screen's summary line.
+  SwingResult? lastSwing;
 
   /// Set when a foe falls; the battle screen opens the merchant and clears it.
   bool merchantDue = false;
@@ -80,13 +113,18 @@ class GameController extends ChangeNotifier {
   Future<void> load() async {
     final saved = await storage.load();
     if (saved != null) engine = GameEngine(saved);
+    FoodCountry.chosen = state.settings.foodCountry;
+    unawaited(foodBook.load());
     _syncShown();
+    checkReferrals();
     loaded = true;
     notifyListeners();
   }
 
   void _syncShown() {
     shownFoe = state.foe;
+    shownRare = state.rare;
+    shownSummons = state.summons;
     shownFoeHp = state.foeHp;
     shownFoeMax = state.foeMax;
   }
@@ -95,12 +133,123 @@ class GameController extends ChangeNotifier {
 
   // ---- actions ----
 
-  void logFood(LoggedFood food) {
-    if (busy) return;
+  void logFood(LoggedFood food) => logMeal([food]);
+
+  // ---- combos: log everything at once, the strikes play back to back ----
+
+  final List<LoggedFood> _combo = [];
+
+  /// The strikes of the combo now playing (or the last one), for the summary.
+  final List<SwingResult> comboResults = [];
+
+  /// Foods of the current combo still to strike, and how many it had.
+  int get comboLeft => _combo.length;
+  int comboSize = 0;
+
+  /// A foe fell mid-combo: its spoils and the merchant wait for the last strike.
+  bool _spoilsWaiting = false;
+
+  /// How fast the battle stage plays (long combos speed up; Skip makes it quicker still).
+  double stageSpeed = 1;
+
+  /// Logs [foods] in one go: each food is its own strike, played one after another without
+  /// stopping. Spoils, the merchant and any quest wait until the combo ends. Foods replacing a
+  /// removed one are added quietly (no strike), as before.
+  void logCombo(List<LoggedFood> foods) {
+    if (busy || foods.isEmpty) return;
+    _combo
+      ..clear()
+      ..addAll(foods);
+    comboResults.clear();
+    comboSize = foods.length;
+    _spoilsWaiting = false;
+    stageSpeed = foods.length >= 4 ? 1.6 : (foods.length >= 2 ? 1.3 : 1);
+    _nextInCombo();
+  }
+
+  /// Plays the rest of the combo fast.
+  void skipCombo() {
+    stageSpeed = 4;
+    notifyListeners();
+  }
+
+  void _nextInCombo() {
+    while (_combo.isNotEmpty && nextLogIsCorrection) {
+      engine.logMeal([_combo.removeAt(0)]);
+    }
+    if (_combo.isEmpty) {
+      _comboDone();
+      return;
+    }
+    busy = false; // logMeal below takes it again
+    logMeal([_combo.removeAt(0)]);
+    if (lastSwing != null) comboResults.add(lastSwing!);
+  }
+
+  void _comboDone() {
+    busy = false;
+    stageSpeed = 1;
+    _save();
+    if (_spoilsWaiting) {
+      _spoilsWaiting = false;
+      merchantDue = true;
+    }
+    notifyListeners();
+  }
+
+  /// Carries on with the combo after a strike (or a kill) finishes. False if there's no combo.
+  bool _continueCombo() {
+    if (_combo.isEmpty) {
+      if (comboSize > 0) {
+        comboSize = 0;
+        _comboDone();
+        return true;
+      }
+      return false;
+    }
+    Future<void>.delayed(Duration(milliseconds: (220 / stageSpeed).round()), () {
+      if (!_disposed) _nextInCombo();
+    });
+    return true;
+  }
+
+  /// The next log replaces a removed food, so it won't strike.
+  bool get nextLogIsCorrection => state.corrections > 0;
+
+  /// Logs a meal (one or more foods) as a single strike, or as a correction (no strike) after a
+  /// food was removed.
+  void logMeal(List<LoggedFood> foods) {
+    if (busy || foods.isEmpty) return;
+    if (nextLogIsCorrection) {
+      engine.logMeal(foods);
+      _save();
+      notifyListeners();
+      return;
+    }
     busy = true;
-    final r = engine.logFood(food);
+    _heldHeroHp = state.knight.hp;
+    final r = engine.logMeal(foods);
+    if (r.counter == null) _heldHeroHp = null;
+    lastSwing = r;
     _save();
     _emit(SwingEvent(r));
+    notifyListeners();
+  }
+
+  /// Skeletons the stage shows (they rise when the spell lands and crumble after their last blow).
+  int shownSummons = 0;
+  void showSummons(int n) {
+    shownSummons = n;
+    notifyListeners();
+  }
+
+  /// The hero's HP as the player sees it: the foe's counter only shows once it lands.
+  int get shownHeroHp => _heldHeroHp ?? state.knight.hp;
+  int? _heldHeroHp;
+
+  /// Called by the stage when the foe's counter lands (or misses).
+  void revealCounter() {
+    _heldHeroHp = null;
     notifyListeners();
   }
 
@@ -112,12 +261,14 @@ class GameController extends ChangeNotifier {
 
   /// Called by the stage when the swing animation ends.
   void swingFinished(SwingResult r) {
+    _heldHeroHp = null;
+    shownSummons = state.summons;
     if (r.kill != null) {
       shownFoeHp = 0;
       _emit(KillEvent(r.kill!));
     } else {
-      busy = false;
       shownFoeHp = state.foeHp;
+      if (!_continueCombo()) busy = false;
     }
     notifyListeners();
   }
@@ -137,8 +288,15 @@ class GameController extends ChangeNotifier {
 
   /// Called by the stage when the new foe has arrived.
   void killFinished() {
-    busy = false;
-    merchantDue = true;
+    if (_combo.isNotEmpty) {
+      _spoilsWaiting = true;
+      _continueCombo();
+    } else {
+      busy = false;
+      comboSize = 0;
+      stageSpeed = 1;
+      merchantDue = true;
+    }
     notifyListeners();
   }
 
@@ -156,10 +314,109 @@ class GameController extends ChangeNotifier {
     return true;
   }
 
+  // ---- a friend's aid, the daily gift and the Supporter's Pass ----
+
+  /// Whether a friend can still be called to help today.
+  bool get aidReady => engine.aidReady;
+
+  /// Calls [friend] to strike the foe. The stage plays it, then calls [aidFinished].
+  bool callAid(HeroCard friend) {
+    if (locked || busy) return false;
+    final d = engine.callAid(friend.name);
+    if (d == null) return false;
+    busy = true;
+    _save();
+    _emit(AidEvent(friend, d));
+    notifyListeners();
+    return true;
+  }
+
+  void aidFinished() {
+    shownFoeHp = state.foeHp;
+    busy = false;
+    notifyListeners();
+  }
+
+  bool get loginReady => engine.loginReady(todayKey(DateTime.now()));
+  int get loginSlot => engine.loginSlot;
+
+  LoginClaim? claimLogin() {
+    final c = engine.claimLogin(todayKey(DateTime.now()));
+    if (c != null) _changed();
+    return c;
+  }
+
+  void setSupporter(bool on) {
+    engine.setSupporter(on);
+    _changed();
+  }
+
   bool purchase(String id) {
     final ok = engine.purchase(id);
     if (ok) _changed();
     return ok;
+  }
+
+  EnchantRoll? enchantOffer(EnchantSlot slot, {bool scroll = false}) {
+    final r = engine.enchantOffer(slot, scroll: scroll);
+    _changed();
+    notifyListeners();
+    return r;
+  }
+
+  void applyEnchant(EnchantSlot slot, EnchantRoll roll) {
+    engine.applyEnchant(slot, roll);
+    _changed();
+    notifyListeners();
+  }
+
+  void setCompanion(String id) {
+    engine.setCompanion(id);
+    _changed();
+    notifyListeners();
+  }
+
+  /// Joins from a friend's invite: they're added as a friend and you both earn the Twinbound Band.
+  Future<String?> redeemInvite(String handleOrLink) async {
+    final f = friends;
+    if (f == null) return 'Friends are not available here.';
+    if (state.referredBy != null) return 'You already joined from ${state.referredBy}\'s invite.';
+    final err = await f.redeemInvite(handleOrLink);
+    if (err != null) return err;
+    final handle = handleOrLink.trim().replaceFirst(RegExp(r'^.*\?add='), '').replaceFirst(RegExp(r'^@'), '');
+    engine.joinedByInvite(handle);
+    _changed();
+    notifyListeners();
+    return null;
+  }
+
+  /// Counts friends who joined from your invite since the last look.
+  void checkReferrals() {
+    final n = friends?.takeReferrals() ?? 0;
+    if (n <= 0) return;
+    engine.addReferrals(n);
+    _changed();
+    notifyListeners();
+  }
+
+  void setMount(String? id) {
+    engine.setMount(id);
+    _changed();
+    notifyListeners();
+  }
+
+  void prepareSpell(String id) {
+    final sp = spellById(id);
+    if (sp == null || sp.passive || sp.level > state.knight.level) return;
+    state.knight.preparedSpell = id;
+    _changed();
+    notifyListeners();
+  }
+
+  void loadAmmo(String type) {
+    engine.loadAmmo(type);
+    _changed();
+    notifyListeners();
   }
 
   void wearDye(String id) {
@@ -170,6 +427,7 @@ class GameController extends ChangeNotifier {
   /// Judges the day. The screen shows the Inn and verdict, then calls [wake].
   DayResult rest() {
     final r = engine.rest();
+    lastSwing = null;
     _save();
     if (r.raidDamage > 0) friends?.addRaidDamage(r.raidDamage);
     friends?.updateMyHero(heroCardFor(state));
@@ -196,6 +454,7 @@ class GameController extends ChangeNotifier {
 
   void applySettings(Settings s) {
     engine.applySettings(s);
+    FoodCountry.chosen = s.foodCountry;
     _save();
     notifyListeners();
   }
@@ -211,6 +470,15 @@ class GameController extends ChangeNotifier {
     _syncShown();
     await storage.save(state);
     notifyListeners();
+  }
+
+  /// Removes a food logged today (see [GameEngine.removeLog]).
+  void removeLog(int index) {
+    if (locked) return;
+    if (engine.removeLog(index)) {
+      _save();
+      notifyListeners();
+    }
   }
 
   // ---- loot, classes and friends ----
@@ -249,6 +517,101 @@ class GameController extends ChangeNotifier {
     return ok;
   }
 
+  // ---- quests ----
+
+  /// Accepts the quest on offer. The battle stage walks the quest foe in, then calls
+  /// [questArrived].
+  bool acceptQuest() {
+    if (locked || !engine.acceptQuest()) return false;
+    busy = true;
+    _save();
+    _emit(QuestEvent(encounterType(state.foe, state.rare), 'Quest: ${encounterType(state.foe, state.rare).name}'));
+    notifyListeners();
+    return true;
+  }
+
+  void questArrived() {
+    busy = false;
+    notifyListeners();
+  }
+
+  void declineQuest() {
+    engine.declineQuest();
+    _save();
+    notifyListeners();
+  }
+
+  void abandonQuest() {
+    if (locked || !engine.abandonQuest()) return;
+    _syncShown();
+    _save();
+    notifyListeners();
+  }
+
+  // ---- pickpocketing and stealing ----
+
+  HeistOutcome? tryHeist(Approach a) {
+    if (locked) return null;
+    final r = engine.tryHeist(a);
+    _changed();
+    notifyListeners();
+    return r;
+  }
+
+  void walkOn() {
+    engine.walkOn();
+    _save();
+    notifyListeners();
+  }
+
+  /// After an ambush, the stage walks the furious owner in (call with the battle screen open).
+  void ambushArrives() {
+    if (state.rare == null) return;
+    busy = true;
+    _emit(QuestEvent(encounterType(state.foe, state.rare), 'Ambush!'));
+    notifyListeners();
+  }
+
+  // ---- the World Boss ----
+
+  /// Can strike the World Boss today.
+  bool get worldCanJoin {
+    final w = world?.state;
+    return w != null && !w.joinedToday(world!.uid, worldDay(DateTime.now()));
+  }
+
+  /// Today's blow on the World Boss, if you can still strike.
+  int get worldHitToday => worldHit(state);
+
+  /// The fallen World Boss you can claim a reward for, if any.
+  FallenWorldBoss? get worldClaimable {
+    final f = world?.state?.last;
+    if (f == null || state.worldClaimed >= f.gen || !f.contributors.containsKey(world!.uid)) return null;
+    return f;
+  }
+
+  Future<WorldStrike?> joinWorldBoss() async {
+    final w = world;
+    if (w == null || !worldCanJoin) return null;
+    final name = w.state!.info.name;
+    final r = await w.join(state.settings.name, worldHitToday);
+    if (r != null) {
+      engine.note('You join the fight against $name and strike for ${r.dealt}.${r.felled ? ' It falls!' : ''}', EntryKind.gold);
+      _save();
+    }
+    notifyListeners();
+    return r;
+  }
+
+  (KillResult, ChestFind)? claimWorldBoss() {
+    final f = worldClaimable;
+    if (f == null) return null;
+    final r = engine.claimWorldBoss(f, world!.uid);
+    _changed();
+    notifyListeners();
+    return r;
+  }
+
   KillResult claimRaid(String bossName) {
     final r = engine.claimRaid(bossName);
     _changed();
@@ -266,22 +629,14 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Logs the balanced sample day one meal at a time, waiting for each swing to finish.
+  /// Logs the balanced sample day as one combo.
   Future<void> playSampleDay() async {
     if (locked) return;
     sampleRunning = true;
-    final day = state.day;
     notifyListeners();
     try {
-      for (final name in sampleDayNames) {
-        while (busy && !_disposed) {
-          await Future<void>.delayed(const Duration(milliseconds: 120));
-        }
-        if (_disposed || state.day != day) break; // signed out, or the day ended some other way
-        logFood(LoggedFood.of(sampleFoods.firstWhere((f) => f.name == name)));
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-      }
-      while (busy && !_disposed) {
+      logCombo([for (final name in sampleDayNames) LoggedFood.of(sampleFoods.firstWhere((f) => f.name == name))]);
+      while ((busy || comboLeft > 0) && !_disposed) {
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
     } finally {

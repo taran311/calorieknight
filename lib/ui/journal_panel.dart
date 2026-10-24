@@ -156,12 +156,12 @@ class _Rations extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: 8,
               children: [
-                Text('Log your first meal to draw your sword.', style: Txt.body(italic: true, color: Palette.inkSoft)),
+                Text('Nothing logged today. Type what you ate above to strike.', style: Txt.body(italic: true, color: Palette.inkSoft)),
                 TextButton(
                   onPressed: controller.locked ? null : onSampleDay,
                   style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32), foregroundColor: Palette.blood),
                   child: Text(
-                    'Try a sample day',
+                    'or watch a sample day',
                     style: Txt.body(color: Palette.blood).copyWith(decoration: TextDecoration.underline),
                   ),
                 ),
@@ -169,7 +169,7 @@ class _Rations extends StatelessWidget {
             ),
           )
         else
-          for (final l in s.logs)
+          for (final (i, l) in s.logs.indexed)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: const BoxDecoration(
@@ -183,17 +183,59 @@ class _Rations extends StatelessWidget {
                       spacing: 6,
                       children: [
                         Text(l.name, style: Txt.body()),
-                        if (l.tag != null) FoodTagChip(l.tag!),
+                        if (l.tag != null) FoodTagChip(l.tag!) else if (gradeOf(l) == FoodGrade.wholesome) const WholesomeChip(),
                       ],
                     ),
                   ),
                   Text('${fmt(l.kcal)} kcal', style: Txt.body(size: 14, color: Palette.inkSoft)),
+                  IconButton(
+                    tooltip: 'Remove',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: controller.locked ? null : () => _confirmRemove(context, i, l.name),
+                    icon: const Icon(Icons.close, size: 17, color: Palette.inkSoft),
+                  ),
                 ],
               ),
             ),
       ],
     );
   }
+}
+
+extension on _Rations {
+  Future<void> _confirmRemove(BuildContext context, int index, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Palette.parch,
+        title: Text('Remove $name?', style: Txt.inkLabel(size: 17)),
+        content: Text(
+          'Its calories come off today. The strike it made stays used, and the next food you log replaces it without striking again.',
+          style: Txt.body(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Keep', style: Txt.inkLabel())),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text('Remove', style: Txt.inkLabel(color: Palette.blood))),
+        ],
+      ),
+    );
+    if (ok == true) controller.removeLog(index);
+  }
+}
+
+/// Marks food that swings harder (+15%).
+class WholesomeChip extends StatelessWidget {
+  const WholesomeChip({super.key});
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Wholesome: swings 15% harder',
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(color: const Color(0xFF3E6A2E), borderRadius: BorderRadius.circular(2)),
+      child: Text('Wholesome', style: Txt.inkLabel(size: 11, color: const Color(0xFFF2FFE6), weight: FontWeight.w700)),
+    ),
+  );
 }
 
 class FoodTagChip extends StatelessWidget {

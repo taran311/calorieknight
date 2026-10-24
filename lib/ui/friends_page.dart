@@ -271,7 +271,7 @@ class HeroAvatar extends StatelessWidget {
       borderRadius: BorderRadius.circular(2),
       gradient: const RadialGradient(center: Alignment(0, .3), colors: [Color(0xFF4A5040), Palette.stone0]),
     ),
-    child: HeroFigure(look: lookFor(card.heroClass, card.loadout, dye: card.dye, trinket: card.trinket), animate: false),
+    child: HeroFigure(look: lookFor(card.heroClass, card.loadout, dye: card.dye, trinket: card.trinket, female: card.female), animate: false),
   );
 }
 
@@ -353,7 +353,7 @@ Future<void> showHeroSheet(BuildContext context, HeroCard h, {VoidCallback? onRe
                       borderRadius: BorderRadius.circular(2),
                       gradient: const RadialGradient(center: Alignment(0, .3), colors: [Color(0xFF4A5040), Palette.stone0]),
                     ),
-                    child: HeroFigure(look: lookFor(h.heroClass, h.loadout, dye: h.dye, trinket: h.trinket)),
+                    child: HeroFigure(look: lookFor(h.heroClass, h.loadout, dye: h.dye, trinket: h.trinket, female: h.female)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

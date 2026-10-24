@@ -239,6 +239,7 @@ class Knight {
     this.loginDate,
     this.loginDays = 0,
     this.supporter = false,
+    this.female = false,
   }) : ammo = ammo ?? {},
        mounts = mounts ?? [],
        pets = pets ?? {},
@@ -291,6 +292,9 @@ class Knight {
   /// cards). Never more damage, loot or XP.
   bool supporter;
 
+  /// The hero's look: a heroine when true. Purely cosmetic, the same for every class.
+  bool female;
+
   /// XP earned since the dragon egg was bought; null when no egg.
   int? dragonXp;
   List<Status> status;
@@ -331,6 +335,7 @@ class Knight {
     if (loginDate != null) 'login': loginDate,
     if (loginDays > 0) 'loginDays': loginDays,
     if (supporter) 'supporter': true,
+    if (female) 'female': true,
   };
 
   factory Knight.fromJson(Map<String, dynamic> j) {
@@ -379,6 +384,7 @@ class Knight {
       loginDate: j['login'] as String?,
       loginDays: (j['loginDays'] as num?)?.toInt() ?? 0,
       supporter: j['supporter'] == true,
+      female: j['female'] == true,
     );
   }
 }

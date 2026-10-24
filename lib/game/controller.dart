@@ -583,6 +583,13 @@ class GameController extends ChangeNotifier {
     return got;
   }
 
+  /// Hero or heroine: cosmetic, free to change any time.
+  void setFemale(bool female) {
+    if (state.knight.female == female) return;
+    state.knight.female = female;
+    _changed();
+  }
+
   void chooseClass(HeroClass c) {
     engine.chooseClass(c);
     _changed();

@@ -70,6 +70,8 @@ class HeroPage extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text('${tier.name} · damage taken −${(damageReduction(k) * 100).round()}%', style: Txt.onStone(size: 13.5, color: Palette.cream)),
                         Text('${dyeById(k.dye).name} colours', style: Txt.onStone(size: 13)),
+                        const SizedBox(height: 8),
+                        HeroOrHeroine(female: k.female, onChanged: c.setFemale),
                         const SizedBox(height: 10),
                         Wrap(
                           spacing: 8,

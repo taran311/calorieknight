@@ -1,7 +1,7 @@
 // Friends, cheers, the weekly leaderboard and co-op raids.
 //
-// [FriendsService] is the seam. [MockFriendsService] keeps everything on this device with a few
-// fictional heroes so the features can be tried before Firestore exists. The Firestore version
+// [FriendsService] is the seam. [MockFriendsService] keeps everything on this device (no made-up
+// heroes) until the Firestore version exists. The Firestore version
 // mirrors The Calorie Card's shapes:
 //   users/{uid}            { handle, friends: [uid], hero: HeroCard }
 //   usernames/{handle}     { uid }
@@ -37,7 +37,11 @@ class HeroCard {
     this.streak = 0,
     this.foesFelled = 0,
     this.supporter = false,
+    this.female = false,
   });
+
+  /// Drawn as a heroine (cosmetic).
+  final bool female;
 
   /// Wears the Supporter's crest (cosmetic).
   final bool supporter;
@@ -63,6 +67,7 @@ class HeroCard {
     'streak': streak,
     'felled': foesFelled,
     if (supporter) 'sup': true,
+    if (female) 'f': true,
   };
 
   factory HeroCard.fromJson(Map<String, dynamic> j) {
@@ -80,6 +85,7 @@ class HeroCard {
       streak: (j['streak'] as num?)?.toInt() ?? 0,
       foesFelled: (j['felled'] as num?)?.toInt() ?? 0,
       supporter: j['sup'] == true,
+      female: j['f'] == true,
     );
   }
 }
@@ -100,6 +106,7 @@ HeroCard heroCardFor(GameState s, {String uid = 'me', String handle = ''}) {
     streak: balancedStreak(s),
     foesFelled: s.foesFelled,
     supporter: k.supporter,
+    female: k.female,
   );
 }
 
@@ -217,7 +224,8 @@ abstract class FriendsService extends ChangeNotifier {
   int takeReferrals() => 0;
 }
 
-/// Device-only friends for prototyping, seeded with fictional heroes.
+/// Friends kept on this device. Starts empty: no made-up heroes. (Real friends between accounts
+/// need the server; until then a search finds no one and the invite link is the way in.)
 class MockFriendsService extends FriendsService {
   MockFriendsService({required this.accountId, required String heroName}) : myHandle = handleFrom(heroName);
 
@@ -225,14 +233,14 @@ class MockFriendsService extends FriendsService {
   @override
   final String myHandle;
 
-  String get _key => 'calorieknight.friends.v1.$accountId';
+  // v2: v1 saves held the made-up test heroes, so they're left behind.
+  String get _key => 'calorieknight.friends.v2.$accountId';
 
   final List<Friend> _friends = [];
   final List<HeroCard> _incoming = [], _outgoing = [];
   final List<String> _cheers = [];
   Raid? _raid;
   HeroCard? _me;
-  final List<Timer> _timers = [];
   bool _disposed = false;
 
   @override
@@ -246,51 +254,6 @@ class MockFriendsService extends FriendsService {
   @override
   HeroCard? get me => _me;
 
-  // ---- the fictional directory ----
-
-  static const _people = <(String, String, String, HeroClass, int, String)>[
-    // uid, name, handle, class, level, dye
-    ('u-elowen', 'Elowen Thistledown', 'elowen', HeroClass.ranger, 7, 'forest'),
-    ('u-tobin', 'Brother Tobin', 'tobin', HeroClass.knight, 9, 'ochre'),
-    ('u-maribel', 'Maribel Quill', 'maribel', HeroClass.mage, 6, 'royal'),
-    ('u-rowan', 'Rowan Fairweather', 'rowan', HeroClass.knight, 4, 'crimson'),
-    ('u-isolde', 'Isolde Brightwater', 'isolde', HeroClass.mage, 11, 'royal'),
-    ('u-gareth', 'Gareth Oakhart', 'gareth', HeroClass.knight, 5, 'forest'),
-    ('u-wren', 'Wren Hollis', 'wren', HeroClass.ranger, 8, 'ochre'),
-    ('u-cedric', 'Cedric Vale', 'cedric', HeroClass.ranger, 3, 'crimson'),
-  ];
-
-  HeroCard _person(String uid) {
-    final p = _people.firstWhere((x) => x.$1 == uid);
-    final seed = uid.codeUnits.fold<int>(7, (a, b) => a * 31 + b) & 0x7fffffff;
-    final rng = math.Random(seed), table = LootTable(rng), c = p.$4;
-    final tiers = tiersFor(c).where((t) => !t.dropOnly).toList();
-    final loadout = Loadout(armour: tiers[math.min(tiers.length - 1, p.$5 ~/ 3)].id, weapon: starterWeapon(c));
-    for (var i = 0; i < 6; i++) {
-      final g = table.roll(c, p.$5, boss: i == 0);
-      if (g.slot == GearSlot.trinket || g.slot == GearSlot.ring) continue;
-      final cur = loadout.inSlot(g.slot);
-      if (cur == null || g.score > cur.score) loadout.put(g);
-    }
-    // Balanced days this week vary by person and by week, so the board moves.
-    final charm = table.roll(c, p.$5);
-    final now = DateTime.now(), wk = math.Random(seed ^ weekKey(now).hashCode);
-    final daysSoFar = now.weekday;
-    return HeroCard(
-      uid: uid,
-      name: p.$2,
-      handle: p.$3,
-      heroClass: c,
-      level: p.$5,
-      loadout: loadout,
-      trinket: charm.slot == GearSlot.trinket ? charm : null,
-      dye: p.$6,
-      balancedWeek: math.min(daysSoFar, (daysSoFar * (.35 + wk.nextDouble() * .6)).round()),
-      streak: wk.nextInt(9),
-      foesFelled: p.$5 * 2 + wk.nextInt(3),
-    );
-  }
-
   // ---- persistence ----
 
   @override
@@ -299,44 +262,25 @@ class MockFriendsService extends FriendsService {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
       if (raw == null) {
-        _seed();
+        _startRaid(0);
       } else {
         final j = (jsonDecode(raw) as Map).cast<String, dynamic>();
         for (final f in (j['friends'] as List? ?? [])) {
           final m = (f as Map).cast<String, dynamic>();
-          _friends.add(Friend(_person(m['uid'] as String), cheeredOn: m['cheered'] as String?));
+          if (m['card'] is Map) _friends.add(Friend(HeroCard.fromJson((m['card'] as Map).cast<String, dynamic>()), cheeredOn: m['cheered'] as String?));
         }
-        _incoming.addAll((j['incoming'] as List? ?? []).map((u) => _person(u as String)));
-        _outgoing.addAll((j['outgoing'] as List? ?? []).map((u) => _person(u as String)));
+        _incoming.addAll((j['incoming'] as List? ?? []).whereType<Map>().map((m) => HeroCard.fromJson(m.cast<String, dynamic>())));
+        _outgoing.addAll((j['outgoing'] as List? ?? []).whereType<Map>().map((m) => HeroCard.fromJson(m.cast<String, dynamic>())));
         _cheers.addAll((j['cheers'] as List? ?? []).cast<String>());
         if (j['raid'] is Map) _raid = Raid.fromJson((j['raid'] as Map).cast<String, dynamic>());
-        final last = j['cheerSeed'] as String?;
-        // A friend cheers you once on each new day you open the app, so cheers can be tried.
-        if (last != _dayKey(DateTime.now()) && _friends.isNotEmpty) {
-          _cheers.add(_friends[DateTime.now().day % _friends.length].card.name);
-        }
       }
     } catch (_) {
       _friends.clear();
-      _seed();
+      _startRaid(0);
     }
     _simulateRaid(DateTime.now());
-    for (final o in _outgoing) {
-      _acceptLater(o.uid);
-    }
     await _save();
     _notify();
-  }
-
-  void _seed() {
-    for (final uid in const ['u-elowen', 'u-tobin', 'u-maribel']) {
-      _friends.add(Friend(_person(uid)));
-    }
-    _incoming.add(_person('u-rowan'));
-    _cheers.add('Elowen Thistledown');
-    final members = _friends.length + 1, boss = raidBosses.first;
-    final max = boss.hpPerHero * members;
-    _raid = Raid(boss: 0, hp: max, maxHp: max, week: weekKey(DateTime.now()), lastSim: DateTime.now().subtract(const Duration(days: 2)));
   }
 
   Future<void> _save() async {
@@ -346,13 +290,12 @@ class MockFriendsService extends FriendsService {
         _key,
         jsonEncode({
           'friends': [
-            for (final f in _friends) {'uid': f.card.uid, 'cheered': f.cheeredOn},
+            for (final f in _friends) {'card': f.card.toJson(), 'cheered': f.cheeredOn},
           ],
-          'incoming': _incoming.map((c) => c.uid).toList(),
-          'outgoing': _outgoing.map((c) => c.uid).toList(),
+          'incoming': _incoming.map((c) => c.toJson()).toList(),
+          'outgoing': _outgoing.map((c) => c.toJson()).toList(),
           'cheers': _cheers,
           'raid': _raid?.toJson(),
-          'cheerSeed': _dayKey(DateTime.now()),
         }),
       );
     } catch (_) {
@@ -377,33 +320,7 @@ class MockFriendsService extends FriendsService {
     if (q.isEmpty) return 'Enter a username or email.';
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (q == myHandle) return "That's you!";
-    final match = _people.where((p) => p.$3 == q || '${p.$3}@calorieknight.test' == q).firstOrNull;
-    if (match == null) return 'No hero goes by "$query". Check the spelling, or send them your invite link.';
-    final uid = match.$1;
-    if (_friends.any((f) => f.card.uid == uid)) return 'You are already friends with ${match.$2}.';
-    if (_outgoing.any((c) => c.uid == uid)) return 'A request to ${match.$2} is already on its way.';
-    final waiting = _incoming.where((c) => c.uid == uid).firstOrNull;
-    if (waiting != null) {
-      accept(uid);
-      return null;
-    }
-    _outgoing.add(_person(uid));
-    _acceptLater(uid);
-    _changed();
-    return null;
-  }
-
-  /// The fictional heroes accept after a short wait so the flow can be seen end to end.
-  void _acceptLater(String uid) {
-    _timers.add(
-      Timer(const Duration(seconds: 12), () {
-        if (_disposed) return;
-        final i = _outgoing.indexWhere((c) => c.uid == uid);
-        if (i < 0) return;
-        _friends.add(Friend(_outgoing.removeAt(i)));
-        _changed();
-      }),
-    );
+    return 'No hero goes by "$query" yet. Send them your invite link instead.';
   }
 
   @override
@@ -481,6 +398,8 @@ class MockFriendsService extends FriendsService {
       balancedWeek: card.balancedWeek,
       streak: card.streak,
       foesFelled: card.foesFelled,
+      supporter: card.supporter,
+      female: card.female,
     );
     _notify();
   }
@@ -548,9 +467,6 @@ class MockFriendsService extends FriendsService {
   @override
   void dispose() {
     _disposed = true;
-    for (final t in _timers) {
-      t.cancel();
-    }
     super.dispose();
   }
 }

@@ -187,6 +187,7 @@ class Look {
     this.wyrmHorns = false,
     this.wyrmGloves = false,
     this.wyrmBoots = false,
+    this.female = false,
   });
 
   final String build;
@@ -238,6 +239,9 @@ class Look {
 
   /// Enchanted or high-tier wyrmscale glows softly in its dragon's colour.
   final Color? armourGlow;
+
+  /// A heroine: longer hair (a braid under a helm), lashes and no beard.
+  final bool female;
 
   /// Wyrmscale's horns: on the shoulders, elbows, forearms and knees (the armour), the knuckles
   /// (gloves), and the heels and toes (boots).
@@ -330,10 +334,10 @@ Ramp? _wyrmHelm(GearItem? helm) {
 }
 
 /// The player's hero, built from their class, armour tier, loot and dye.
-Look heroLook(Knight k) => lookFor(k.heroClass, k.loadout, dye: k.dye, gloves: k.gloves, poisoned: k.poisonDays > 0, trinket: k.trinket);
+Look heroLook(Knight k) => lookFor(k.heroClass, k.loadout, dye: k.dye, gloves: k.gloves, poisoned: k.poisonDays > 0, trinket: k.trinket, female: k.female);
 
 /// A look for any class and loadout (used for the hero, friends' heroes and the class picker).
-Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = false, bool poisoned = false, GearItem? trinket}) {
+Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = false, bool poisoned = false, GearItem? trinket, bool female = false}) {
   final dyeCol = Color(dyeById(dye).argb);
   final w = l.weapon, o = l.activeOffhand; // a mismatched off-hand is stowed, not held
   final gl = l.gloves == null ? null : gearRamp(l.gloves!), bt = l.boots == null ? null : gearRamp(l.boots!);
@@ -355,6 +359,7 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
       final plate = tier.look == ArmourLook.plate || (tier.look == ArmourLook.auto && (l.armour == 'plate' || l.armour == 'gilded' || l.armour == 'bonemail'));
       final cloth = ramp(0xFF5A4A3A, .25, .5), boot = bt ?? ramp(0xFF4A3220, .2, .5);
       return Look(
+        female: female,
         build: 'human',
         stance: Stance.knight,
         skin: skin,
@@ -394,6 +399,7 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
       final robe = ramp(mwt?.argb ?? _robes[l.armour] ?? 0xFF6E6252, .3, .5);
       final trim = mwt != null ? Color(mwt.trim) : l.armour == 'archmage' || l.armour == 'astral' || l.armour == 'oathrobe' ? const Color(0xFFE2C46A) : (l.armour == 'bonerobe' ? const Color(0xFF6A5A44) : shade(robe[1], .35));
       return Look(
+        female: female,
         build: 'human',
         stance: Stance.mage,
         skin: skin,
@@ -418,7 +424,7 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         wyrmGloves: _wyrmOf(l.gloves) != null,
         wyrmBoots: _wyrmOf(l.boots) != null,
         hair: const Color(0xFF5A4630),
-        beard: l.armour == 'archmage' || l.armour == 'astral' ? const Color(0xFFD8D2C4) : null,
+        beard: !female && (l.armour == 'archmage' || l.armour == 'astral') ? const Color(0xFFD8D2C4) : null,
         weapon: weapon == Weapon.none ? Weapon.staff : weapon,
         offhand: off,
         weaponGlow: glow ?? const Color(0xFFFF9A3A),
@@ -432,6 +438,7 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
       final leather = ramp(rw != null ? wyrmTiers[rw - 1].argb : (_leathers[l.armour] ?? 0xFF7A5233), .28, .5);
       final dark = l.armour == 'shadowweave', dragon = l.armour == 'dragonhide' || rw != null;
       return Look(
+        female: female,
         build: 'lean',
         stance: Stance.ranger,
         skin: skin,

@@ -12,6 +12,7 @@ void drawHead(Canvas c, Skeleton sk, Look look, double t, {bool still = false}) 
   c.save();
   c.translate(sk.head.dx, sk.head.dy);
   c.rotate(sk.headAngle * deg);
+  if (look.female) _heroineHair(c, r, look);
   switch (look.head) {
     case HeadKind.coif || HeadKind.zombie || HeadKind.pillager || HeadKind.pillagerCap:
       _humanHead(c, r, look);
@@ -111,9 +112,17 @@ void _humanHead(Canvas c, double r, Look look) {
     Path()
       ..moveTo(r * .38, -r * .4)
       ..quadraticBezierTo(r * .62, -r * .48, r * .86, -r * .36),
-    strokePaint(look.hair, 2.2),
+    strokePaint(look.hair, look.female ? 1.5 : 2.2),
   );
-  c.drawLine(Offset(r * .7, r * .5), Offset(r * .88, r * .5), strokePaint(const Color(0x66000000), 1.2));
+  if (look.female) {
+    // Lashes, and a touch of colour on the lips.
+    final lash = strokePaint(const Color(0xFF2A1B10), 1.1);
+    c.drawLine(Offset(r * .72, -r * .29), Offset(r * .84, -r * .37), lash);
+    c.drawLine(Offset(r * .64, -r * .3), Offset(r * .71, -r * .4), lash);
+    c.drawLine(Offset(r * .72, r * .5), Offset(r * .88, r * .49), strokePaint(const Color(0xFFB0605A), 2));
+  } else {
+    c.drawLine(Offset(r * .7, r * .5), Offset(r * .88, r * .5), strokePaint(const Color(0x66000000), 1.2));
+  }
 
   if (zombie) {
     c.drawPath(
@@ -372,6 +381,51 @@ void _hoodHead(Canvas c, double r, Look look) {
         ..quadraticBezierTo(r * 1.3, r * .5, r * 1.15, r * 1.15),
       strokePaint(trim, 2),
     );
+  }
+}
+
+/// A heroine's hair, drawn behind the head: long and loose when the head is open, a braid hanging
+/// below a helm, nothing under a wrapped hood.
+void _heroineHair(Canvas c, double r, Look look) {
+  final col = look.hair, ramp3 = [shade(col, .25), col, shade(col, -.45)];
+  switch (look.head) {
+    case HeadKind.bare || HeadKind.circlet || HeadKind.wizardhat || HeadKind.scoutcap || HeadKind.magemask || HeadKind.wyrmcirclet:
+      final hair = Path()
+        ..moveTo(-r * .1, -r * 1.12)
+        ..quadraticBezierTo(-r * 1.25, -r * 1.05, -r * 1.3, -r * .1)
+        ..quadraticBezierTo(-r * 1.35, r * .9, -r * 1.05, r * 1.7)
+        ..quadraticBezierTo(-r * .75, r * 1.85, -r * .45, r * 1.55)
+        ..quadraticBezierTo(-r * .6, r * 1.0, -r * .35, r * .55)
+        ..lineTo(-r * .2, -r * .2)
+        ..close();
+      fillPath(c, hair, ramp3, Offset(-r, -r), Offset(-r * .4, r * 1.7));
+      final strand = strokePaint(shade(col, -.35), 1);
+      for (var i = 0; i < 3; i++) {
+        c.drawPath(
+          Path()
+            ..moveTo(-r * (.7 + i * .17), -r * .5)
+            ..quadraticBezierTo(-r * (1.05 + i * .1), r * .5, -r * (.75 + i * .12), r * 1.5),
+          strand,
+        );
+      }
+    case HeadKind.coif || HeadKind.nasal || HeadKind.greathelm || HeadKind.sallet || HeadKind.wyrmhelm:
+      // A braid falling from under the helm, tied off with a band.
+      for (var i = 0; i < 5; i++) {
+        final ctr = Offset(-r * (.95 + i * .07), r * (.55 + i * .3));
+        final link = Path()..addOval(Rect.fromCenter(center: ctr, width: r * .42, height: r * .38));
+        fillPath(c, link, ramp3, ctr - Offset(r * .2, r * .2), ctr + Offset(r * .2, r * .2));
+        c.drawPath(link, strokePaint(shade(col, -.5), .8));
+      }
+      final tie = Offset(-r * 1.32, r * 2.0);
+      c.drawLine(tie - Offset(r * .14, 0), tie + Offset(r * .14, 0), strokePaint(look.trim ?? const Color(0xFF9A2A22), 2.4));
+      final tuft = Path()
+        ..moveTo(tie.dx - r * .12, tie.dy)
+        ..quadraticBezierTo(tie.dx - r * .05, tie.dy + r * .45, tie.dx + r * .02, tie.dy + r * .5)
+        ..quadraticBezierTo(tie.dx + r * .1, tie.dy + r * .3, tie.dx + r * .12, tie.dy)
+        ..close();
+      fillPath(c, tuft, ramp3, Offset(tie.dx, tie.dy), Offset(tie.dx, tie.dy + r * .5));
+    default:
+      break;
   }
 }
 

@@ -23,6 +23,7 @@ class ClassPickerScreen extends StatefulWidget {
 
 class _ClassPickerScreenState extends State<ClassPickerScreen> {
   HeroClass _pick = HeroClass.knight;
+  late bool _female = widget.controller.state.knight.female;
 
   @override
   Widget build(BuildContext context) {
@@ -44,8 +45,10 @@ class _ClassPickerScreenState extends State<ClassPickerScreen> {
                     style: Txt.onStone(size: 14),
                   ),
                 ),
+                HeroOrHeroine(female: _female, onChanged: (f) => setState(() => _female = f)),
+                const SizedBox(height: 8),
                 Expanded(
-                  child: ClassChoices(selected: _pick, onSelect: (h) => setState(() => _pick = h), dye: c.state.knight.dye),
+                  child: ClassChoices(selected: _pick, onSelect: (h) => setState(() => _pick = h), dye: c.state.knight.dye, female: _female),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
@@ -55,7 +58,10 @@ class _ClassPickerScreenState extends State<ClassPickerScreen> {
                       title: 'Set out as a ${_pick.label.toLowerCase()}',
                       caption: _pick.trait,
                       tone: ButtonTone.blood,
-                      onPressed: () => c.chooseClass(_pick),
+                      onPressed: () {
+                        c.setFemale(_female);
+                        c.chooseClass(_pick);
+                      },
                     ),
                   ),
                 ),
@@ -68,10 +74,46 @@ class _ClassPickerScreenState extends State<ClassPickerScreen> {
   }
 }
 
+/// Hero or heroine: two stone tabs. Cosmetic only, and free to change later on the hero page.
+class HeroOrHeroine extends StatelessWidget {
+  const HeroOrHeroine({super.key, required this.female, required this.onChanged});
+  final bool female;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tab(String label, bool value) {
+      final on = female == value;
+      return Semantics(
+        button: true,
+        selected: on,
+        label: label,
+        child: GestureDetector(
+          onTap: () => onChanged(value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+            decoration: stoneDecoration(fill: on ? Palette.stone3 : Palette.stone1).copyWith(
+              border: Border.all(color: on ? Palette.amber : Palette.stone0, width: 2),
+            ),
+            child: Text(label, style: Txt.label(size: 15, color: on ? Palette.amber : Palette.cream, weight: FontWeight.w700)),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [tab('Hero', false), const SizedBox(width: 8), tab('Heroine', true)],
+    );
+  }
+}
+
 /// Three class cards: side by side on wide screens, stacked on phones.
 class ClassChoices extends StatelessWidget {
-  const ClassChoices({super.key, required this.selected, required this.onSelect, this.current, this.dye = 'crimson', this.loadouts});
+  const ClassChoices({super.key, required this.selected, required this.onSelect, this.current, this.dye = 'crimson', this.loadouts, this.female = false});
   final HeroClass selected;
+  final bool female;
   final ValueChanged<HeroClass> onSelect;
   final HeroClass? current;
   final String dye;
@@ -90,7 +132,7 @@ class ClassChoices extends StatelessWidget {
             selected: h == selected,
             current: h == current,
             wide: wide,
-            look: lookFor(h, loadouts?[h] ?? Loadout.starter(h), dye: dye),
+            look: lookFor(h, loadouts?[h] ?? Loadout.starter(h), dye: dye, female: female),
             onTap: () => onSelect(h),
           ),
       ];
@@ -243,6 +285,7 @@ class _RetrainWindowState extends State<_RetrainWindow> {
                   selected: _pick,
                   current: k.heroClass,
                   dye: k.dye,
+                  female: k.female,
                   loadouts: k.loadouts,
                   onSelect: (h) {
                     if (h != k.heroClass) setState(() => _pick = h);

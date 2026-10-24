@@ -250,7 +250,7 @@ class _BattleStageState extends State<BattleStage> with SingleTickerProviderStat
       case AidEvent(:final friend, :final damage):
         final d0 = _slot(1900);
         _at(d0, () {
-          _ally = (friend.name, lookFor(friend.heroClass, friend.loadout, dye: friend.dye, trinket: friend.trinket));
+          _ally = (friend.name, lookFor(friend.heroClass, friend.loadout, dye: friend.dye, trinket: friend.trinket, female: friend.female));
           fx['ally'] = 0;
           _tween('ally', 1, 1800, ease: (x) => x);
           _banner = ('${friend.name} comes to help!', const Color(0xFF9BE27A), now);

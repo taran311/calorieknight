@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 
 import 'game/controller.dart';
 import 'services/auth.dart';
+import 'services/calorie_card_link.dart';
 import 'services/firebase_auth_service.dart';
 import 'services/food_book.dart';
 import 'services/food_country.dart';
@@ -16,6 +17,7 @@ import 'services/storage.dart';
 import 'services/world_boss_service.dart';
 import 'ui/auth_screens.dart';
 import 'ui/class_picker.dart';
+import 'ui/plan_setup.dart';
 import 'ui/shell.dart';
 import 'ui/theme.dart';
 
@@ -100,7 +102,14 @@ class _AuthGateState extends State<AuthGate> {
       final practice = PracticeWorldBossService(accountId: a.id);
       final world = widget.auth.isReal ? LiveWorldBossService(uid: a.id, fallback: practice) : practice;
       _world = world;
-      _game = GameController(storage: GameStorage(accountId: a.id), foodBook: FoodBook(accountId: a.id), friends: friends, world: world);
+      _game = GameController(
+        storage: GameStorage(accountId: a.id),
+        foodBook: FoodBook(accountId: a.id),
+        friends: friends,
+        world: world,
+        // One sign-in for both apps: the stamina allowance can come from (and go to) The Calorie Card.
+        cardLink: widget.auth.isReal ? FirestoreCalorieCardLink(a.id) : const NoCalorieCardLink(),
+      );
       unawaited(world.load());
       _game!.load().then((_) async {
         _nameNewKnight(a);
@@ -141,6 +150,8 @@ class _AuthGateState extends State<AuthGate> {
         listenable: game,
         builder: (context, _) {
           if (!game.loaded) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Palette.amber)));
+          // The Calorie Card's set-up questions (or its plan) give the stamina allowance.
+          if (game.state.settings.plan == null) return PlanSetupScreen(key: ValueKey('plan-${account.id}'), controller: game, email: account.email);
           if (!game.state.knight.classChosen) return ClassPickerScreen(key: ValueKey('pick-${account.id}'), controller: game);
           return MainShell(key: ValueKey(account.id), controller: game, friends: _friends!, auth: auth);
         },

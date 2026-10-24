@@ -12,7 +12,7 @@ import 'spells.dart';
 /// Everything the hero's class, armour and gear add up to.
 class HeroStats {
   int damage = 0, poison = 0, burn = 0, frost = 0, smite = 0, bleed = 0, lifesteal = 0, vigour = 0, regen = 0, thorns = 0, dragonkin = 0;
-  int crit = 0, guard = 0, fortune = 0, wisdom = 0, dodge = 0, parry = 0, block = 0, leech = 0; // percentages
+  int crit = 0, guard = 0, fortune = 0, wisdom = 0, dodge = 0, parry = 0, block = 0, leech = 0, wyrmbane = 0; // percentages
   double armour = 0;
 
   int get(Stat s) => switch (s) {
@@ -35,6 +35,7 @@ class HeroStats {
     Stat.parry => parry,
     Stat.block => block,
     Stat.leech => leech,
+    Stat.wyrmbane => wyrmbane,
   };
 
   void add(Stat s, int v) {
@@ -77,6 +78,8 @@ class HeroStats {
         block += v;
       case Stat.leech:
         leech += v;
+      case Stat.wyrmbane:
+        wyrmbane += v;
     }
   }
 }
@@ -397,6 +400,8 @@ SwingDamage swingDamage(GameState state, int logIndex, double roll, {Special? sp
   if (full && foeType.spirit && k.heroClass != HeroClass.mage) base = (base * .6).round();
   // Packs: sweeping blows, area spells, special arrows and special attacks catch them all.
   if (full && foeType.pack && sweepsPack(weapon, sp, cast, shot)) base = (base * 1.5).round();
+  // Wyrmscale gear: dragons take more (up to +35% from a full set).
+  if (full && foeType.dragon && s.wyrmbane > 0) base = (base * (1 + math.min(wyrmbaneCap, s.wyrmbane) / 100)).round();
   if (crit) base = (base * critMultiplier(weapon) * (devastating ? 1.5 : 1)).round();
   if (glancing) base = (base * .5).round();
   final ds = dragonStage(k), pet = petStage(k)?.$2;

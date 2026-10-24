@@ -175,7 +175,16 @@ class StatusBadges extends StatelessWidget {
       if (k.status.contains(Status.inspired)) ('Inspired', const Color(0xFF9BE27A), 'Yesterday was balanced: swings +20% today'),
       if (k.poisonDays > 0) ('Poisoned blade · ${k.poisonDays}d', const Color(0xFF9BE27A), '+6 per swing, 15 each night'),
       if (ds != null) ('${ds.name}${ds.chip > 0 ? ' +${ds.chip}' : ''}', const Color(0xFFF4955F), 'Your dragon companion'),
-      if (petStage(k) != null) ('${petStage(k)!.$2.name} +${petStage(k)!.$2.bite}', petStage(k)!.$1 == Pet.hellhound ? const Color(0xFFFF7A2A) : const Color(0xFFC8C4BC), 'Your companion bites on every swing'),
+      if (petStage(k) != null)
+        (
+          '${petStage(k)!.$2.name} +${petStage(k)!.$2.bite}',
+          switch (petStage(k)!.$1) {
+            Pet.hellhound => const Color(0xFFFF7A2A),
+            Pet.wolf => const Color(0xFFC8C4BC),
+            Pet.fairy => const Color(0xFFE6B8FF),
+          },
+          petStage(k)!.$1 == Pet.fairy ? 'Your fairy strikes on every swing and casts a charm every ${petStage(k)!.$2.charm} full swings' : 'Your companion bites on every swing',
+        ),
       if (state.cheersToday > 0) ('Cheered ×${state.cheersToday.clamp(0, 3)}', const Color(0xFFF2D27A), '+${state.cheersToday.clamp(0, 3) * 5}% damage until you rest'),
       if (ammoById(k.ammoLoaded) != null && k.heroClass == HeroClass.ranger)
         (

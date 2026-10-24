@@ -261,7 +261,7 @@ class _VerdictWindow extends StatelessWidget {
             ),
             if (v.kind != VerdictKind.quiet) ...[
               const SizedBox(height: 4),
-              Text('${fmt(v.kcal)} kcal · ${v.pct.round()}% of your allowance', style: Txt.body(size: 13.5, italic: true, color: Palette.inkSoft)),
+              Text('${fmt(v.kcal)} stamina (kcal) · ${v.pct.round()}% of fully fuelled', style: Txt.body(size: 13.5, italic: true, color: Palette.inkSoft)),
             ],
             const SizedBox(height: 8),
             const Divider(height: 1, color: Palette.parchLine),
@@ -377,7 +377,7 @@ class _SettingsWindowState extends State<_SettingsWindow> {
       return setState(() => _error = 'Carbs, protein and fat must add up to 100%. They add up to ${math.max(0, c) + math.max(0, p) + math.max(0, f)}%.');
     }
     widget.controller.applySettings(
-      Settings(name: name, allowance: a, carbs: c, protein: p, fat: f, gentle: _gentle, peaceful: _peaceful, innScene: _inn, foodCountry: _country),
+      Settings(name: name, allowance: a, carbs: c, protein: p, fat: f, gentle: _gentle, peaceful: _peaceful, innScene: _inn, foodCountry: _country, tourSeen: s.tourSeen, plan: s.plan),
     );
     Navigator.of(context).pop();
   }

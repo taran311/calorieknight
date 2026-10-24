@@ -334,3 +334,42 @@ class Tabs<T> extends StatelessWidget {
     );
   }
 }
+
+/// Calories are your hero's stamina: a bolt and the number ("⚡ 368"). Food you log fills your
+/// hero with stamina; today's allowance is what "fully fuelled" means.
+class StaminaText extends StatelessWidget {
+  const StaminaText(this.kcal, {super.key, this.size = 15, this.colour = Palette.amber, this.prefix = '', this.suffix = '', this.weight = FontWeight.w800, this.onParchment = false});
+  final int kcal;
+  final double size;
+  final Color colour;
+  final String prefix, suffix;
+  final FontWeight weight;
+  final bool onParchment;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = onParchment ? Txt.inkLabel(size: size, color: colour, weight: weight) : Txt.label(size: size, color: colour, weight: weight);
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (prefix.isNotEmpty) TextSpan(text: prefix),
+          WidgetSpan(alignment: PlaceholderAlignment.middle, child: Icon(Icons.bolt, size: size * 1.05, color: colour)),
+          TextSpan(text: formatStamina(kcal)),
+          if (suffix.isNotEmpty) TextSpan(text: suffix),
+        ],
+      ),
+      style: style,
+      semanticsLabel: '$prefix$kcal stamina$suffix',
+    );
+  }
+}
+
+/// 1234 → "1,234".
+String formatStamina(int n) {
+  final s = n.abs().toString(), b = StringBuffer(n < 0 ? '-' : '');
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+    b.write(s[i]);
+  }
+  return b.toString();
+}

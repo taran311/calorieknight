@@ -109,11 +109,65 @@ const boneArmour = {'bonemail', 'bonerobe', 'bonescale'};
 /// Undead counters hit this much as hard against bone armour.
 const boneWard = .75;
 
-List<ArmourTier> tiersFor(HeroClass c) => [...armourTiers, ...deedArmour].where((t) => t.heroClass == c).toList();
+/// Wyrmscale: armour, weapons, helms, gloves and boots made from slain dragons. Each kind of dragon
+/// gives its own tier and colour, and every piece strikes dragons harder (Stat.wyrmbane).
+class WyrmTier {
+  const WyrmTier(this.tier, this.dragon, this.name, this.argb, this.trim);
+
+  /// 1 (Ash Wyvern) to 5 (the Elder Wyrm).
+  final int tier;
+
+  /// The dragon's look (its rare and named variants count too).
+  final String dragon;
+  final String name;
+  final int argb, trim;
+}
+
+const wyrmTiers = <WyrmTier>[
+  WyrmTier(1, 'wyvern', 'Ashen', 0xFF9A8C7C, 0xFFD8CBB8),
+  WyrmTier(2, 'mossDragon', 'Mossback', 0xFF5E8E48, 0xFFC8E08A),
+  WyrmTier(3, 'frostWyrm', 'Rimescale', 0xFF9CCDE8, 0xFFF0FAFF),
+  WyrmTier(4, 'obsidian', 'Obsidian', 0xFF3E3442, 0xFFE0502A),
+  WyrmTier(5, 'elderWyrm', 'Elder', 0xFFE2B048, 0xFFFFF0B8),
+];
+
+WyrmTier? wyrmTierFor(String dragonLook) => wyrmTiers.where((w) => w.dragon == dragonLook).firstOrNull;
+
+/// A wyrmscale armour tier's id for a class: 'wyrm-knight-3'.
+String wyrmArmourId(HeroClass c, int tier) => 'wyrm-${c.name}-$tier';
+
+/// The wyrmscale tier (1 to 5) of an armour id, or null.
+int? wyrmTierOfArmour(String id) => id.startsWith('wyrm-') ? int.tryParse(id.split('-').last) : null;
+
+/// Wyrmscale armour: a little better than the merchant's best at every tier, and it strikes
+/// dragons harder.
+final wyrmArmour = <ArmourTier>[
+  for (final w in wyrmTiers)
+    for (final c in HeroClass.values)
+      ArmourTier(
+        wyrmArmourId(c, w.tier),
+        switch (c) {
+          HeroClass.knight => '${w.name} wyrmplate',
+          HeroClass.mage => '${w.name} wyrmscale robe',
+          HeroClass.ranger => '${w.name} wyrmhide',
+        },
+        .30 + .04 * (w.tier - 1),
+        0,
+        c,
+        dropOnly: true,
+        metal: w.argb,
+        look: c == HeroClass.knight ? ArmourLook.scales : ArmourLook.auto,
+        perk: 'wyrmbane',
+        perkValue: 3 + 2 * w.tier,
+        perkText: '+${3 + 2 * w.tier}% damage to dragons',
+      ),
+];
+
+List<ArmourTier> tiersFor(HeroClass c) => [...armourTiers, ...deedArmour, ...wyrmArmour].where((t) => t.heroClass == c).toList();
 
 ArmourTier armourTierById(String id) {
   if (id == 'leather') id = 'padded'; // saves from the first prototype
-  return [...armourTiers, ...deedArmour].firstWhere((t) => t.id == id, orElse: () => armourTiers.first);
+  return [...armourTiers, ...deedArmour, ...wyrmArmour].firstWhere((t) => t.id == id, orElse: () => armourTiers.first);
 }
 
 /// Index within its class (0 is the starting armour).

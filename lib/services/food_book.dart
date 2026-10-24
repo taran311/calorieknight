@@ -31,10 +31,18 @@ class FoodItem {
     this.tagSet = false,
     DateTime? time,
     this.meal,
+    this.matchedName,
+    this.cardId,
   }) : time = time ?? DateTime.now();
 
+  /// Logged on The Calorie Card first (its entry id): striking with it marks it used here.
+  final String? cardId;
+
+  /// As The Calorie Card does: a typed food keeps the words you typed ("linda mccartney
+  /// sausages"), and the product it matched is shown under it. A scan shows the product's name.
   factory FoodItem.resolved(ResolvedFood r) => FoodItem(
-    name: r.name,
+    name: r.source == 'barcode' ? r.name : _capitalised(r.query),
+    matchedName: r.name,
     query: r.query,
     calories: r.calories,
     protein: r.protein,
@@ -50,6 +58,10 @@ class FoodItem {
       FoodItem(name: f.name, calories: f.kcal.toDouble(), protein: f.protein, carbs: f.carbs, fat: f.fat, source: 'menu', tag: f.tag, tagSet: true);
 
   String name;
+
+  /// The product a lookup matched, when it differs from what was typed ("Linda McCartney 6
+  /// Vegan Sausages" for "linda mccartney sausages").
+  String? matchedName;
 
   /// What was typed, when it differs from the name the database gave it.
   final String? query;
@@ -97,6 +109,8 @@ class FoodItem {
     tagSet: tagSet,
     time: time,
     meal: meal,
+    matchedName: matchedName,
+    cardId: cardId,
   );
 
   LoggedFood toLogged(String meal) => LoggedFood(
@@ -114,6 +128,7 @@ class FoodItem {
   Map<String, dynamic> toJson() => {
     'n': name,
     if (query != null && query != name) 'q': query,
+    if (matchedName != null && matchedName != name) 'mn': matchedName,
     'k': calories,
     'p': protein,
     'c': carbs,
@@ -131,6 +146,7 @@ class FoodItem {
     return FoodItem(
       name: j['n'] as String? ?? 'Food',
       query: j['q'] as String?,
+      matchedName: j['mn'] as String?,
       calories: n('k'),
       protein: n('p'),
       carbs: n('c'),
@@ -451,4 +467,9 @@ class FoodBook {
     if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.substring(0, w.length - 1);
     return w;
   }
+}
+
+String _capitalised(String s) {
+  final t = s.trim();
+  return t.isEmpty ? t : '${t[0].toUpperCase()}${t.substring(1)}';
 }

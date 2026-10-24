@@ -1,5 +1,6 @@
 // The app frame: HP, XP and level across the top, and a bottom bar like The Calorie Card's:
-// Camp, Hero, a raised Strike orb in the middle, Friends and Profile. Wide screens get a sidebar.
+// Camp (with your hero), the Cookbook, a raised Strike orb in the middle, Friends and Profile.
+// Wide screens get a sidebar.
 
 import 'package:flutter/material.dart';
 
@@ -13,23 +14,25 @@ import '../services/friends.dart';
 import 'auth_screens.dart' show CrestPainter;
 import 'camp_page.dart';
 import 'friends_page.dart';
-import 'hero_page.dart';
+import 'recipes_page.dart';
 import 'hud.dart';
 import 'profile_page.dart';
 import 'theme.dart';
 
-enum ShellTab { camp, hero, friends, profile }
+enum ShellTab { camp, recipes, friends, profile }
 
 class _TabSpec {
   const _TabSpec(this.tab, this.label, this.icon, this.selectedIcon);
   final ShellTab tab;
   final String label;
-  final IconData icon, selectedIcon;
+
+  /// Null for the cookbook, which is painted.
+  final IconData? icon, selectedIcon;
 }
 
 const _tabs = [
   _TabSpec(ShellTab.camp, 'Camp', Icons.cabin_outlined, Icons.cabin),
-  _TabSpec(ShellTab.hero, 'Hero', Icons.shield_outlined, Icons.shield),
+  _TabSpec(ShellTab.recipes, 'Recipes', null, null),
   _TabSpec(ShellTab.friends, 'Friends', Icons.people_outline, Icons.people),
   _TabSpec(ShellTab.profile, 'Profile', Icons.person_outline, Icons.person),
 ];
@@ -82,13 +85,13 @@ class _MainShellState extends State<MainShell> {
 
   int _badge(ShellTab t) => switch (t) {
     ShellTab.friends => f.badgeCount + (f.raidClaimable ? 1 : 0),
-    ShellTab.hero => c.state.pendingLoot.length,
+    ShellTab.camp => c.state.pendingLoot.length,
     _ => 0,
   };
 
   Widget _page(ShellTab t) => switch (t) {
     ShellTab.camp => CampPage(controller: c),
-    ShellTab.hero => HeroPage(controller: c),
+    ShellTab.recipes => RecipesPage(controller: c, embedded: true, onLog: (r) => strikeWith(context, c, r)),
     ShellTab.friends => FriendsPage(controller: c, friends: f),
     ShellTab.profile => ProfilePage(controller: c, auth: widget.auth, friends: f),
   };
@@ -104,7 +107,8 @@ class _MainShellState extends State<MainShell> {
             index: _current.index,
             children: [for (final t in ShellTab.values) _page(t)],
           );
-          final header = StatsHeader(controller: c);
+          // Camp's hero card carries HP, XP, level, day and gold, so it has no header above it.
+          final header = _current == ShellTab.camp ? const SizedBox.shrink() : StatsHeader(controller: c);
           final wide = MediaQuery.sizeOf(context).width >= _sidebarBreakpoint;
           if (wide) {
             return Scaffold(
@@ -234,7 +238,7 @@ class _NavItem extends StatelessWidget {
                 border: Border.all(color: selected ? Palette.stone0 : Colors.transparent),
               ),
               alignment: Alignment.center,
-              child: _BadgedIcon(icon: selected ? spec.selectedIcon : spec.icon, count: badge, colour: colour),
+              child: _BadgedIcon(spec: spec, selected: selected, count: badge, colour: colour),
             ),
             const SizedBox(height: 4),
             Text(spec.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Txt.label(size: 12.5, color: colour, weight: selected ? FontWeight.w800 : FontWeight.w600)),
@@ -246,8 +250,9 @@ class _NavItem extends StatelessWidget {
 }
 
 class _BadgedIcon extends StatelessWidget {
-  const _BadgedIcon({required this.icon, required this.count, required this.colour});
-  final IconData icon;
+  const _BadgedIcon({required this.spec, required this.selected, required this.count, required this.colour});
+  final _TabSpec spec;
+  final bool selected;
   final int count;
   final Color colour;
   @override
@@ -255,7 +260,9 @@ class _BadgedIcon extends StatelessWidget {
     isLabelVisible: count > 0,
     label: Text('$count'),
     backgroundColor: Palette.blood,
-    child: Icon(icon, color: colour, size: 24),
+    child: spec.icon == null
+        ? SizedBox(width: 26, height: 26, child: CookbookIcon(colour: colour, selected: selected))
+        : Icon(selected ? spec.selectedIcon : spec.icon, color: colour, size: 24),
   );
 }
 
@@ -385,7 +392,7 @@ class _Sidebar extends StatelessWidget {
                     child: Row(
                       children: [
                         const SizedBox(width: 12),
-                        _BadgedIcon(icon: t.tab == current ? t.selectedIcon : t.icon, count: badge(t.tab), colour: t.tab == current ? Palette.amber : Palette.parch2),
+                        _BadgedIcon(spec: t, selected: t.tab == current, count: badge(t.tab), colour: t.tab == current ? Palette.amber : Palette.parch2),
                         const SizedBox(width: 14),
                         Text(t.label, style: Txt.label(size: 15.5, color: t.tab == current ? Palette.amber : Palette.cream)),
                       ],

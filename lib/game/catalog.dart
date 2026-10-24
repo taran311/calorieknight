@@ -506,10 +506,10 @@ class DragonStage {
 
 /// Companions besides the dragon. Only one companion fights at a time (choose on the Hero page);
 /// the active one grows with the XP you earn.
-enum Pet { hellhound, wolf }
+enum Pet { hellhound, wolf, fairy }
 
 class PetStage {
-  const PetStage(this.name, this.minXp, this.bite, {this.burn = 0, this.crit = 0, this.guard = false});
+  const PetStage(this.name, this.minXp, this.bite, {this.burn = 0, this.crit = 0, this.guard = false, this.charm = 0});
   final String name;
   final int minXp;
 
@@ -521,6 +521,22 @@ class PetStage {
 
   /// Leaps in front of the foe's counter now and then (hellhound alphas and up).
   final bool guard;
+
+  /// Fairies: every this many full swings, a charm (see [FairyCharm]). 0 for hounds.
+  final int charm;
+}
+
+/// A fairy's charms, cast in turn: sleep, sap its strength, slow it, poison it, drink its life.
+enum FairyCharm {
+  slumber('Slumber dust', 'the foe sleeps through its next blow', 0xFFB8A0E8),
+  enfeeble('Wilting charm', 'its blows land 40% softer for 2 turns', 0xFFB8A0D8),
+  slow('Tangleroot', 'half its blows miss for 2 turns', 0xFF6ABF9A),
+  venom('Thornsting', 'poison damage', 0xFF8BE05A),
+  leech('Lifebloom', 'drains the foe and heals you', 0xFFE07AA0);
+
+  const FairyCharm(this.label, this.effect, this.argb);
+  final String label, effect;
+  final int argb;
 }
 
 const petStages = <Pet, List<PetStage>>{
@@ -536,7 +552,22 @@ const petStages = <Pet, List<PetStage>>{
     PetStage('Dire wolf', 1000, 6, crit: 5),
     PetStage('Moonfang', 2500, 8, crit: 8),
   ],
+  // A lighter bite than the hounds, but a charm every few full swings.
+  Pet.fairy: [
+    PetStage('Wisp', 0, 1, charm: 4),
+    PetStage('Pixie', 300, 2, charm: 3),
+    PetStage('Faerie', 1000, 3, charm: 3),
+    PetStage('Seraph', 2500, 4, charm: 2),
+  ],
 };
+
+/// Scrolls of the Fae (they free a fairy companion, any class): from treasure chests, rare foes and
+/// the night road.
+const faeScrollChest = .02, faeScrollRare = .04;
+
+/// Wyrmscale pieces from dragons: the chance one drops (more from bosses and rare dragons), and the
+/// most extra damage to dragons a full set can give (percent).
+const wyrmChance = .18, wyrmChanceBoss = .5, wyrmChanceRare = .35, wyrmbaneCap = 35;
 
 /// Hellhound pups come from the Obsidian Dragon's lair (more often from its rare variants) and from
 /// blazing rare foes anywhere; wolf pups are sold by the merchant.

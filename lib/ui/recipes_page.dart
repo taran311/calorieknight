@@ -2,6 +2,7 @@
 // read from a screenshot), say how much it makes, then log servings of it in one strike.
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,8 +24,11 @@ Future<void> openRecipes(BuildContext context, GameController c, {required Futur
 enum _Sort { newest, name, kcalLow, kcalHigh }
 
 class RecipesPage extends StatefulWidget {
-  const RecipesPage({super.key, required this.controller, required this.onLog});
+  const RecipesPage({super.key, required this.controller, required this.onLog, this.embedded = false});
   final GameController controller;
+
+  /// Shown as a tab (the cookbook in the bottom bar) rather than pushed over another page.
+  final bool embedded;
 
   /// Logs the chosen servings (the caller opens the battle).
   final Future<void> Function(RationsResult) onLog;
@@ -76,7 +80,7 @@ class _RecipesPageState extends State<RecipesPage> {
   Future<void> _addToToday(Recipe r) async {
     final item = await showLogRecipeSheet(context, r);
     if (item == null || !mounted) return;
-    Navigator.of(context).pop();
+    if (!widget.embedded) Navigator.of(context).pop();
     await widget.onLog(RationsResult(item.meal ?? mealForHour(DateTime.now().hour), [item]));
   }
 
@@ -103,11 +107,13 @@ class _RecipesPageState extends State<RecipesPage> {
   Widget build(BuildContext context) {
     final shown = _shown;
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Palette.stone1,
-        foregroundColor: Palette.cream,
-        title: Text('Recipes', style: Txt.label(size: 19, color: Palette.amber, weight: FontWeight.w800)),
-      ),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              backgroundColor: Palette.stone1,
+              foregroundColor: Palette.cream,
+              title: Text('Recipes', style: Txt.label(size: 19, color: Palette.amber, weight: FontWeight.w800)),
+            ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Palette.bloodDeep,
         foregroundColor: const Color(0xFFFFF0DC),
@@ -124,6 +130,18 @@ class _RecipesPageState extends State<RecipesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (widget.embedded) ...[
+                    Row(
+                      children: [
+                        const SizedBox(width: 30, height: 30, child: CookbookIcon(colour: Palette.amber, selected: true)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text('Your cookbook', style: Txt.label(size: 20, color: Palette.amber, weight: FontWeight.w800))),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text('Your go-to dishes. Log a serving and it strikes like any other meal.', style: Txt.onStone(size: 13.5)),
+                    const SizedBox(height: 10),
+                  ],
                   if (book.recipes.isNotEmpty)
                     Row(
                       children: [
@@ -154,7 +172,7 @@ class _RecipesPageState extends State<RecipesPage> {
                     Parchment(
                       child: Column(
                         children: [
-                          const Icon(Icons.menu_book, size: 40, color: Palette.inkSoft),
+                          const SizedBox(width: 48, height: 48, child: CookbookIcon(colour: Palette.inkSoft, selected: false)),
                           const SizedBox(height: 6),
                           Text('No recipes yet', style: Txt.inkLabel(size: 17)),
                           const SizedBox(height: 4),
@@ -786,4 +804,70 @@ class _RecipeEditorPageState extends State<RecipeEditorPage> {
       ),
     );
   }
+}
+
+/// An old leather-bound cookbook: a strap and clasp, banded spine, page edges, and a spoon and
+/// fork tooled on the cover. Outlined in [colour]; [selected] fills the cover.
+class CookbookIcon extends StatelessWidget {
+  const CookbookIcon({super.key, required this.colour, this.selected = false});
+  final Color colour;
+  final bool selected;
+  @override
+  Widget build(BuildContext context) => CustomPaint(painter: _CookbookPainter(colour, selected));
+}
+
+class _CookbookPainter extends CustomPainter {
+  _CookbookPainter(this.colour, this.selected);
+  final Color colour;
+  final bool selected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = math.min(size.width, size.height) / 24;
+    canvas.save();
+    canvas.translate((size.width - 24 * s) / 2, (size.height - 24 * s) / 2);
+    canvas.scale(s);
+    final line = Paint()
+      ..color = colour
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    final thin = Paint()
+      ..color = colour
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    // Page edges peeking out at the right and bottom.
+    final pages = RRect.fromLTRBR(6.5, 3.5, 21, 21.5, const Radius.circular(1.5));
+    canvas.drawRRect(pages, Paint()..color = colour.withValues(alpha: selected ? .25 : .12));
+    canvas.drawRRect(pages, thin);
+    for (final y in const [8.0, 12.0, 16.0]) {
+      canvas.drawLine(Offset(20.2, y), Offset(21, y), thin);
+    }
+    // The cover, with a rounded spine at the left.
+    final cover = RRect.fromLTRBAndCorners(3, 2.5, 19.5, 20.5, topLeft: const Radius.circular(3), bottomLeft: const Radius.circular(3), topRight: const Radius.circular(1.5), bottomRight: const Radius.circular(1.5));
+    if (selected) canvas.drawRRect(cover, Paint()..color = colour.withValues(alpha: .35));
+    canvas.drawRRect(cover, line);
+    // Spine bands.
+    canvas.drawLine(const Offset(6.2, 2.8), const Offset(6.2, 20.2), thin);
+    for (final y in const [5.5, 17.5]) {
+      canvas.drawLine(Offset(3.4, y), Offset(6.2, y), thin);
+    }
+    // A strap round the fore-edge with a clasp.
+    canvas.drawLine(const Offset(19.5, 11.5), const Offset(22.5, 11.5), line);
+    canvas.drawRRect(RRect.fromLTRBR(21.2, 10, 23.4, 13, const Radius.circular(.8)), selected ? (Paint()..color = colour) : thin);
+    // Spoon and fork tooled on the cover.
+    canvas.drawOval(Rect.fromCenter(center: const Offset(10.6, 8.2), width: 2.8, height: 3.8), thin);
+    canvas.drawLine(const Offset(10.6, 10.1), const Offset(10.6, 16.5), thin);
+    canvas.drawLine(const Offset(15.4, 6.4), const Offset(15.4, 16.5), thin);
+    for (final x in const [14.2, 16.6]) {
+      canvas.drawLine(Offset(x, 6.4), Offset(x, 8.6), thin);
+    }
+    canvas.drawPath(Path()..moveTo(14.2, 8.6)..quadraticBezierTo(15.4, 10.2, 16.6, 8.6), thin);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_CookbookPainter old) => old.colour != colour || old.selected != selected;
 }

@@ -50,6 +50,13 @@ Skeleton drawHumanoid(Canvas c, Look look, Pose pose, double t, DrawOptions o, {
     final glow = look.eyeGlow ?? const Color(0xFFB8E0F0);
     c.drawOval(Rect.fromCenter(center: sk.chest, width: b.chest * 5, height: b.spine * 4.5), Paint()..color = glow.withValues(alpha: .22 * o.alpha)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18));
   }
+  final aura = look.armourGlow;
+  if (aura != null) {
+    // Enchanted wyrmscale: a slow, soft glow in its dragon's colour.
+    final pulse = still ? .85 : .7 + .3 * math.sin(t / 520);
+    c.drawOval(Rect.fromCenter(center: sk.chest, width: b.chest * 4.4, height: b.spine * 3.8), Paint()..color = aura.withValues(alpha: .26 * pulse * o.alpha)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16));
+    c.drawCircle(sk.head, b.head * 1.9, Paint()..color = aura.withValues(alpha: .2 * pulse * o.alpha)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+  }
   final alpha = o.alpha * (look.ghostly ? .74 : 1);
   final layered = alpha < 1 || o.tint != null;
   if (layered) {
@@ -63,12 +70,13 @@ Skeleton drawHumanoid(Canvas c, Look look, Pose pose, double t, DrawOptions o, {
   if (cape != null) _cape(c, sk, look, cape, t, still);
   if (look.quiver != null) _quiver(c, sk, look);
   _arm(c, sk, sk.armFar, darker(look.upper), darker(look.fore), darker(look.hand), look.elbow == null ? null : darker(look.elbow!));
+  _armHorns(c, sk, sk.armFar, look, far: true);
   final bark = look.torsoKind == TorsoKind.bark;
   if (bark) _barkArm(c, sk, sk.armFar, look, far: true);
   final nAngle = sk.armNear.foreAngle + pose[J.nW], fAngle = sk.armFar.foreAngle + pose[J.fW];
   final heldInFront = look.offhand == Weapon.tome || look.offhand == Weapon.orb;
   if (look.offhand != Weapon.none && !heldInFront) drawWeapon(c, sk.armFar.hand, fAngle, look.offhand, look, t: t, glow: look.offhandGlow, still: still);
-  if (look.weapon == Weapon.greatsword) drawWeapon(c, sk.armNear.hand, nAngle, Weapon.greatsword, look, t: t, glow: look.weaponGlow, still: still, tint: look.weaponTint, rarity: look.weaponRarity);
+  if (look.weapon.bigBlade) drawWeapon(c, sk.armNear.hand, nAngle, look.weapon, look, t: t, glow: look.weaponGlow, still: still, tint: look.weaponTint, rarity: look.weaponRarity);
   if (legs) {
     // Ents stand on roots and skeletons on bare bone; everyone else wears boots.
     // (Feet the same as the shins, like a ghoul's, are bare.)
@@ -80,7 +88,9 @@ Skeleton drawHumanoid(Canvas c, Look look, Pose pose, double t, DrawOptions o, {
         ? _Foot.claw
         : (look.build == 'skeleton' || identical(look.boot, look.shin) ? _Foot.bone : _Foot.boot);
     _leg(c, sk, sk.legFar, darker(look.thigh), darker(look.shin), darker(look.boot), look.knee == null ? null : darker(look.knee!), look.wraps, foot);
+    _legHorns(c, sk, sk.legFar, look, far: true);
     _leg(c, sk, sk.legNear, look.thigh, look.shin, look.boot, look.knee, look.wraps, foot);
+    _legHorns(c, sk, sk.legNear, look);
   } else if (look.ghostly) {
     _wisp(c, sk, look.skirt ?? look.torso, t, still);
   }
@@ -98,7 +108,7 @@ Skeleton drawHumanoid(Canvas c, Look look, Pose pose, double t, DrawOptions o, {
   drawHead(c, sk, look, t, still: still);
   if (heldInFront) drawWeapon(c, sk.armFar.hand, fAngle, look.offhand, look, t: t, glow: look.offhandGlow, still: still);
   if (look.shield != null) _shield(c, sk.armFar, look.shield!);
-  if (look.weapon != Weapon.none && look.weapon != Weapon.greatsword) {
+  if (look.weapon != Weapon.none && !look.weapon.bigBlade) {
     drawWeapon(c, sk.armNear.hand, nAngle, look.weapon, look, t: t, glow: look.weaponGlow, still: still, tint: look.weaponTint, rarity: look.weaponRarity);
     if (look.weapon == Weapon.bow || look.weapon == Weapon.longbow || look.weapon == Weapon.orkbow || look.weapon == Weapon.heartbow || look.weapon == Weapon.runebow) {
       _bowString(c, sk, nAngle, look.weapon == Weapon.bow ? 56 : (look.weapon == Weapon.orkbow || look.weapon == Weapon.heartbow ? 66 : 70));
@@ -107,7 +117,8 @@ Skeleton drawHumanoid(Canvas c, Look look, Pose pose, double t, DrawOptions o, {
   _arm(c, sk, sk.armNear, look.upper, look.fore, look.hand, look.elbow);
   if (bark) _barkArm(c, sk, sk.armNear, look);
   if (look.pauldron != null) _pauldron(c, sk, sk.armNear, look.pauldron!);
-  if (look.weapon == Weapon.greatsword) blob(c, sk.armFar.hand, b.hand, darker(look.hand));
+  _armHorns(c, sk, sk.armNear, look);
+  if (look.weapon.bigBlade) blob(c, sk.armFar.hand, b.hand, darker(look.hand));
   if (layered) c.restore();
   c.restore();
   return sk;
@@ -840,6 +851,7 @@ void _runes(Canvas c, Offset at, double angleDeg, Weapon shape, double t, bool s
 (Offset, Offset, double)? _glowSpan(Weapon kind) => switch (kind) {
   Weapon.longsword => (const Offset(0, 14), const Offset(0, 112), 9),
   Weapon.greatsword => (const Offset(0, 14), const Offset(0, 144), 11),
+  Weapon.wyrmblade => (const Offset(0, 14), const Offset(0, 150), 13),
   Weapon.shortsword => (const Offset(0, 12), const Offset(0, 58), 8),
   Weapon.falchion => (const Offset(3, 14), const Offset(3, 92), 12),
   Weapon.dagger => (const Offset(0, 10), const Offset(0, 38), 6),
@@ -984,6 +996,8 @@ void drawWeapon(Canvas c, Offset at, double angleDeg, Weapon kind, Look look, {d
         const Offset(0, 11),
       );
       fillPath(c, _rrectPath(Rect.fromCenter(center: const Offset(0, 9.5), width: w * 1.9, height: 7), 1.5), guard, const Offset(0, 6), const Offset(0, 13));
+    case Weapon.wyrmblade:
+      _wyrmblade(c, steel, look);
     case Weapon.falchion:
       capsule(c, const Offset(0, -14), 3.2, const Offset(0, 6), 3.2, _gripRamp);
       blob(c, const Offset(0, -16), 4.2, _goldRamp);
@@ -1572,4 +1586,142 @@ ui.Picture snapshot(Look look, Pose pose, {required Size size, required Offset a
   final c = Canvas(rec, Offset.zero & size);
   drawHumanoid(c, look, pose, 0, DrawOptions(at: at, scale: scale, shadow: false), still: true);
   return rec.endRecording();
+}
+
+/// The Wyrmbane greatsword: a broad blade in the dragon's colour, its edge a row of ivory teeth and
+/// its spine a ridge of little spikes; a guard of two horns swept forward; a fang for a pommel.
+void _wyrmblade(Canvas c, Ramp blade, Look look) {
+  const len = 152.0, w = 8.0;
+  const ivory = [Color(0xFFFFF8E6), Color(0xFFE2D4B0), Color(0xFF7A6A48)];
+  capsule(c, const Offset(0, -28), 3.4, const Offset(0, 6), 3.4, const [Color(0xFF5A2E22), Color(0xFF3A1A12), Color(0xFF1A0A06)]);
+  // Pommel: a curved fang.
+  fillPath(
+    c,
+    Path()
+      ..moveTo(-3.5, -28)
+      ..quadraticBezierTo(-6, -36, -1, -42)
+      ..quadraticBezierTo(1, -36, 3.5, -28)
+      ..close(),
+    ivory,
+    const Offset(-4, -40),
+    const Offset(4, -28),
+  );
+  // Teeth down the cutting edge (drawn first, so the blade overlaps their roots).
+  for (var y = 22.0; y < len - 24; y += 11) {
+    fillPath(
+      c,
+      Path()
+        ..moveTo(w - 1.5, y)
+        ..lineTo(w + 5.5, y + 4)
+        ..lineTo(w - 1.5, y + 8)
+        ..close(),
+      ivory,
+      Offset(w, y),
+      Offset(w + 5, y + 8),
+    );
+  }
+  // Spikes along the spine.
+  for (var y = 30.0; y < len - 40; y += 16) {
+    fillPath(
+      c,
+      Path()
+        ..moveTo(-w + 1, y)
+        ..lineTo(-w - 4, y + 6)
+        ..lineTo(-w + 1, y + 9)
+        ..close(),
+      blade,
+      Offset(-w - 4, y),
+      Offset(-w, y + 9),
+    );
+  }
+  final b = Path()
+    ..moveTo(-w + 1, 10)
+    ..lineTo(w - 1, 10)
+    ..lineTo(w, len - 30)
+    ..quadraticBezierTo(w - 1, len - 10, 0, len)
+    ..quadraticBezierTo(-w * .6, len - 16, -w + 1, len - 34)
+    ..close();
+  fillPath(c, b, blade, const Offset(-w, 0), const Offset(w, 0), width: 1.6);
+  // A groove down the middle, lit along one lip.
+  c.drawLine(const Offset(-1, 16), const Offset(-1, len - 40), strokePaint(const Color(0x80000000), 2));
+  c.drawLine(const Offset(1.2, 16), const Offset(1.2, len - 40), strokePaint(const Color(0x55FFFFFF), .9));
+  // The guard: two horns curving forward, and a bar over the blade.
+  for (final side in const [-1.0, 1.0]) {
+    fillPath(
+      c,
+      Path()
+        ..moveTo(0, 6)
+        ..quadraticBezierTo(side * 14, 4, side * 24, 14)
+        ..quadraticBezierTo(side * 15, 9, 0, 11)
+        ..close(),
+      ivory,
+      Offset(side * 24, 4),
+      Offset(0, 12),
+      width: 1.2,
+    );
+  }
+  fillPath(c, Path()..addRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: const Offset(0, 8.5), width: 14, height: 7), const Radius.circular(2))), blade, const Offset(0, 5), const Offset(0, 12));
+  c.drawCircle(const Offset(0, 8.5), 2.2, Paint()..color = look.armourGlow ?? const Color(0xFFE0502A));
+}
+
+const _hornIvory = [Color(0xFFFFF8E6), Color(0xFFE2D4B0), Color(0xFF7A6A48)];
+const _hornIvoryFar = [Color(0xFFD8CCB0), Color(0xFFB0A282), Color(0xFF4E4430)];
+
+/// A small curved horn from [base] pointing along [angle] (radians), [len] long and [w] wide at
+/// the root; it curls a little towards [curl] (+1 or -1).
+void _spike(Canvas c, Offset base, double angle, double len, double w, {bool far = false, double curl = 1}) {
+  c.save();
+  c.translate(base.dx, base.dy);
+  c.rotate(angle);
+  final p = Path()
+    ..moveTo(0, -w / 2)
+    ..quadraticBezierTo(len * .55, -w * .45 - curl * len * .12, len, -curl * len * .22)
+    ..quadraticBezierTo(len * .5, w * .4 - curl * len * .05, 0, w / 2)
+    ..close();
+  fillPath(c, p, far ? _hornIvoryFar : _hornIvory, Offset(0, -w), Offset(0, w), width: 1.1);
+  c.restore();
+}
+
+Offset _polar(double angle, double d) => Offset(math.cos(angle) * d, math.sin(angle) * d);
+
+double _dir(Offset from, Offset to) => math.atan2(to.dy - from.dy, to.dx - from.dx);
+
+/// Wyrmscale on an arm: a horn on the shoulder, one swept back from the elbow, two fins along the
+/// forearm (the armour), and spiked knuckles (the gloves).
+void _armHorns(Canvas c, Skeleton sk, Arm a, Look look, {bool far = false}) {
+  final b = sk.build;
+  if (look.wyrmHorns) {
+    // Shoulder: up and back.
+    _spike(c, a.shoulder + Offset(-b.upper.$1 * .2, -b.upper.$1 * 1.1), -math.pi * .72, 19, 8, far: far, curl: -1);
+    // Elbow: carrying on past the elbow, away from the hand.
+    final back = _dir(a.hand, a.elbow);
+    _spike(c, a.elbow, back - .35, 17, 7.5, far: far);
+    // Fins along the forearm, angled back towards the elbow.
+    for (final k in const [.5]) {
+      final at = Offset.lerp(a.elbow, a.hand, k)!;
+      _spike(c, at + _polar(back - math.pi / 2, b.fore.$1 * .8), back - math.pi / 2 + .7, 10, 5, far: far);
+    }
+  }
+  if (look.wyrmGloves) {
+    final along = _dir(a.elbow, a.hand);
+    for (final dy in const [-.5, .5]) {
+      _spike(c, a.hand + _polar(along + math.pi / 2, dy * b.hand), along - .25, 8, 3.6, far: far);
+    }
+  }
+}
+
+/// Wyrmscale on a leg: a horn jutting forward from the knee (the armour), and a spur at the heel
+/// and a horn over the toe (the boots).
+void _legHorns(Canvas c, Skeleton sk, Leg l, Look look, {bool far = false}) {
+  final b = sk.build;
+  if (look.wyrmHorns) {
+    final up = _dir(l.ankle, l.knee);
+    _spike(c, l.knee + Offset(b.thigh.$2 * .5, 0), up + 1.15, 16, 7.5, far: far, curl: -1);
+    // A smaller one at the hip guard.
+    _spike(c, Offset.lerp(l.hip, l.knee, .3)! + Offset(-b.thigh.$1 * .9, 0), math.pi * .95, 11, 5.5, far: far);
+  }
+  if (look.wyrmBoots) {
+    _spike(c, l.ankle + Offset(-b.shin.$2 * .9, b.shin.$2 * .4), math.pi * .95, 13, 6, far: far);
+    _spike(c, l.ankle + Offset(b.foot * .75, b.shin.$2 * .1), -.75, 10, 4.5, far: far, curl: -1);
+  }
 }

@@ -1,4 +1,4 @@
-// The Hero tab: your painted hero, class, equipped gear, totals and satchel. Gear changes only
+// Kit & spells (opened from your hero at camp): your painted hero, class, equipped gear, totals and satchel. Gear changes only
 // through the spoils of victory (equip or sell) and the merchant.
 
 import 'package:flutter/material.dart';
@@ -635,7 +635,7 @@ class _Companions extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.pets, color: colour, size: 22),
+            Icon(id == Pet.fairy.name ? Icons.auto_awesome : Icons.pets, color: colour, size: 22),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -670,8 +670,9 @@ class _Companions extends StatelessWidget {
         if (stage.burn > 0) '+${stage.burn} fire',
         if (stage.crit > 0) '+${stage.crit}% crit',
         if (stage.guard) 'sometimes takes a blow for you',
+        if (stage.charm > 0) 'a charm every ${stage.charm} full swings (sleep, weaken, slow, poison, life drain, in turn)',
       ].join(', ');
-      rows.add(row(pet.name, stage.name, perk[0].toUpperCase() + perk.substring(1), xp, next?.minXp, pet == Pet.hellhound ? const Color(0xFFFF7A2A) : const Color(0xFFC8C4BC)));
+      rows.add(row(pet.name, stage.name, perk[0].toUpperCase() + perk.substring(1), xp, next?.minXp, petColour(pet)));
     }
     return Stone(
       child: Column(
@@ -687,3 +688,9 @@ class _Companions extends StatelessWidget {
     );
   }
 }
+
+Color petColour(Pet p) => switch (p) {
+  Pet.hellhound => const Color(0xFFFF7A2A),
+  Pet.wolf => const Color(0xFFC8C4BC),
+  Pet.fairy => const Color(0xFFE6B8FF),
+};

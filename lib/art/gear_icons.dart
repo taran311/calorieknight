@@ -110,7 +110,7 @@ void paintGearIcon(Canvas canvas, Size size, GearItem item, HeroClass heroClass,
       canvas.translate(s / 2, s / 2);
       canvas.scale(scale);
       final dir = Offset(math.sin(135 * deg), math.cos(135 * deg));
-      drawWeapon(canvas, -dir * mid, 135, w, iconLook, glow: glow, still: true);
+      drawWeapon(canvas, -dir * mid, 135, w, iconLook, glow: glow, still: true, tint: item.tint == null ? null : Color(item.tint!));
     case GearSlot.helm:
       final b = builds[look.build]!;
       final sk = Skeleton.solve(b, Pose.of({}));
@@ -141,7 +141,7 @@ void paintGearIcon(Canvas canvas, Size size, GearItem item, HeroClass heroClass,
     case GearSlot.trinket || GearSlot.ring:
       canvas.translate(s / 2, s / 2);
       canvas.scale(s / 40);
-      _trinket(canvas, item.art, glow ?? rarity);
+      _trinket(canvas, item.art, glow ?? (item.tint != null && (item.art == 'dragonbonering' || item.art == 'fangamulet') ? _boneGem(item.tint!) : rarity));
     case GearSlot.gloves:
       canvas.translate(s / 2, s / 2);
       canvas.scale(s / 44);
@@ -246,6 +246,33 @@ void _trinket(Canvas c, String art, Color gem) {
       c.drawLine(const Offset(0, -11), const Offset(2, -16), strokePaint(const Color(0xFF4A3018), 2.2));
       c.drawPath(Path()..moveTo(2, -15)..quadraticBezierTo(12, -20, 15, -12)..quadraticBezierTo(8, -10, 2, -15), Paint()..color = const Color(0xFF6AAA3E));
       jewel(const Offset(0, 6), 3.2);
+    case 'dragonbonering':
+      // An ivory band, ridged like knucklebone, set with a gem in the dragon's colour between two
+      // little horns.
+      const ivory = [Color(0xFFFFF8E6), Color(0xFFE2D4B0), Color(0xFF7A6A48)];
+      c.drawCircle(const Offset(0, 4), 9, strokePaint(outline, 6));
+      c.drawCircle(const Offset(0, 4), 9, strokePaint(ivory[1], 4));
+      for (var a = 0.6; a < 5.8; a += .7) {
+        final p = const Offset(0, 4) + Offset(math.cos(a) * 9, math.sin(a) * 9);
+        c.drawLine(p - Offset(math.cos(a) * 1.6, math.sin(a) * 1.6), p + Offset(math.cos(a) * 1.6, math.sin(a) * 1.6), strokePaint(ivory[2], .9));
+      }
+      for (final s in const [-1.0, 1.0]) {
+        c.drawPath(Path()..moveTo(s * 3, -6)..quadraticBezierTo(s * 9, -9, s * 10, -15)..quadraticBezierTo(s * 6, -10, s * 1.5, -9)..close(), Paint()..color = ivory[0]);
+        c.drawPath(Path()..moveTo(s * 3, -6)..quadraticBezierTo(s * 9, -9, s * 10, -15)..quadraticBezierTo(s * 6, -10, s * 1.5, -9)..close(), strokePaint(outline, 1));
+      }
+      jewel(const Offset(0, -6), 4.6);
+    case 'fangamulet':
+      // A curved dragon's fang on a cord, with a small gem at its root.
+      const ivory = [Color(0xFFFFF8E6), Color(0xFFE2D4B0), Color(0xFF7A6A48)];
+      c.drawPath(Path()..moveTo(-12, -14)..quadraticBezierTo(0, 0, 12, -14), strokePaint(const Color(0xFF5A3A22), 1.8));
+      final fang = Path()
+        ..moveTo(-4, -6)
+        ..quadraticBezierTo(-6, 6, 2, 15)
+        ..quadraticBezierTo(0, 6, 4, -6)
+        ..close();
+      fillPath(c, fang, ivory, const Offset(-5, -6), const Offset(5, 15), width: 1.2);
+      c.drawLine(const Offset(-1, 0), const Offset(1, 8), strokePaint(const Color(0x667A6A48), 1));
+      jewel(const Offset(0, -7), 3);
     case 'ring':
       c.drawCircle(const Offset(0, 4), 9, strokePaint(outline, 5.5));
       c.drawCircle(const Offset(0, 4), 9, strokePaint(gold[1], 3.5));
@@ -372,4 +399,10 @@ void _boot(Canvas c, String art, Ramp col) {
   } else if (tall) {
     c.drawLine(const Offset(-9, -14), const Offset(5, -14), strokePaint(shade(col[0], .1), 2));
   }
+}
+
+/// A dragonbone gem in its dragon's colour (Obsidian's black scales get an ember gem).
+Color _boneGem(int tint) {
+  final w = wyrmTiers.where((t) => t.argb == tint).firstOrNull;
+  return Color(w == null ? tint : (w.tier == 4 ? w.trim : w.argb));
 }

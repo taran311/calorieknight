@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../services/calorie_card_link.dart';
 import '../services/food_book.dart';
 import '../services/food_country.dart';
 import '../services/friends.dart';
@@ -16,6 +17,7 @@ import 'engine.dart';
 import 'heists.dart';
 import 'loot.dart';
 import 'models.dart';
+import 'night.dart';
 import 'spells.dart';
 import 'world_boss.dart';
 
@@ -61,9 +63,12 @@ class KillEvent extends StageEvent {
 enum JournalTab { rations, log }
 
 class GameController extends ChangeNotifier {
-  GameController({GameStorage? storage, FoodBook? foodBook, this.friends, this.world})
+  GameController({GameStorage? storage, FoodBook? foodBook, this.friends, this.world, this.cardLink = const NoCalorieCardLink()})
     : storage = storage ?? GameStorage(),
       foodBook = foodBook ?? FoodBook(accountId: 'local');
+
+  /// The same account's plan on The Calorie Card (one sign-in works in both apps).
+  final CalorieCardLink cardLink;
 
   final GameStorage storage;
 
@@ -163,7 +168,9 @@ class GameController extends ChangeNotifier {
     comboResults.clear();
     comboSize = foods.length;
     _spoilsWaiting = false;
-    stageSpeed = foods.length >= 4 ? 1.6 : (foods.length >= 2 ? 1.3 : 1);
+    // Long combos play a little quicker, but every exchange still reads: strike, then the foe's turn.
+    stageSpeed = foods.length >= 4 ? 1.3 : (foods.length >= 2 ? 1.15 : 1);
+    _comboPaused = false;
     _nextInCombo();
   }
 
@@ -207,7 +214,8 @@ class GameController extends ChangeNotifier {
       }
       return false;
     }
-    Future<void>.delayed(Duration(milliseconds: (220 / stageSpeed).round()), () {
+    // A beat between strikes: the hero settles back into stance before the next blow.
+    Future<void>.delayed(Duration(milliseconds: (480 / stageSpeed).round()), () {
       if (!_disposed) _nextInCombo();
     });
     return true;
@@ -289,8 +297,11 @@ class GameController extends ChangeNotifier {
   /// Called by the stage when the new foe has arrived.
   void killFinished() {
     if (_combo.isNotEmpty) {
-      _spoilsWaiting = true;
-      _continueCombo();
+      // A foe fell mid-combo. As after any victory: the spoils, the merchant, then perhaps a quest
+      // or a chance encounter. The rest of the combo carries on after (see [resumeCombo]).
+      _comboPaused = true;
+      busy = false;
+      merchantDue = true;
     } else {
       busy = false;
       comboSize = 0;
@@ -298,6 +309,35 @@ class GameController extends ChangeNotifier {
       merchantDue = true;
     }
     notifyListeners();
+  }
+
+  /// A combo waiting while the spoils, merchant and any encounter are seen to.
+  bool _comboPaused = false;
+  bool get comboPaused => _comboPaused;
+
+  /// Carries on with a combo paused at a victory.
+  void resumeCombo() {
+    if (!_comboPaused) return;
+    _comboPaused = false;
+    busy = true;
+    _continueCombo();
+    notifyListeners();
+  }
+
+  /// The battle screen closed with strikes still to play: log them without the show, so no food is
+  /// lost (the spoils wait at camp).
+  void finishComboQuietly() {
+    if (_combo.isEmpty) return;
+    _comboPaused = false;
+    while (_combo.isNotEmpty) {
+      final r = engine.logMeal([_combo.removeAt(0)]);
+      if (r.kill != null) _spoilsWaiting = true;
+    }
+    comboSize = 0;
+    _spoilsWaiting = false; // the spoils wait at camp
+    merchantDue = false;
+    _comboDone();
+    _syncShown();
   }
 
   void merchantShown() {
@@ -335,6 +375,15 @@ class GameController extends ChangeNotifier {
     shownFoeHp = state.foeHp;
     busy = false;
     notifyListeners();
+  }
+
+  bool get nightReady => engine.nightReady;
+  List<NightPath> get nightChoices => engine.nightChoices;
+
+  NightResult? walkNight(NightPath p) {
+    final r = engine.walkNight(p);
+    if (r != null) _changed();
+    return r;
   }
 
   bool get loginReady => engine.loginReady(todayKey(DateTime.now()));
@@ -452,6 +501,42 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the stamina allowance, protein / carbs / fat and the answers behind them. [share] also
+  /// saves it as the Calorie Card plan when this account doesn't have one there yet.
+  Future<bool> applyPlan(CardPlan plan, {bool share = true, String? email}) async {
+    final s = state.settings.copy();
+    final (c, p, f) = sharesFromGrams(plan.protein, plan.carbs, plan.fat);
+    s
+      ..allowance = plan.calories
+      ..carbs = c
+      ..protein = p
+      ..fat = f
+      ..plan = plan.profile;
+    applySettings(s);
+    return share && plan.profile.source != 'calorie_card' ? cardLink.shareIfMissing(plan, email: email) : false;
+  }
+
+  /// Food logged on The Calorie Card today that hasn't struck here yet.
+  Future<List<CardFood>> calorieCardFoods() async {
+    if (!cardLink.available) return const [];
+    final all = await cardLink.todaysFoods();
+    return [for (final f in all) if (!state.cardTaken.contains(f.id)) f];
+  }
+
+  /// Marks Calorie Card food as struck with, so it can't strike twice.
+  void markCardTaken(Iterable<String> ids) {
+    state.cardTaken.addAll(ids.where((i) => !state.cardTaken.contains(i)));
+    if (state.cardTaken.length > 400) state.cardTaken.removeRange(0, state.cardTaken.length - 400);
+    _save();
+  }
+
+  /// The camp's spotlight tour has been seen (or skipped).
+  void markTourSeen() {
+    if (state.settings.tourSeen) return;
+    state.settings.tourSeen = true;
+    _save();
+  }
+
   void applySettings(Settings s) {
     engine.applySettings(s);
     FoodCountry.chosen = s.foodCountry;
@@ -532,6 +617,11 @@ class GameController extends ChangeNotifier {
 
   void questArrived() {
     busy = false;
+    // A quest foe (or an ambusher) stepped in mid-combo: the rest of the combo strikes it.
+    if (_comboPaused) {
+      resumeCombo();
+      return;
+    }
     notifyListeners();
   }
 

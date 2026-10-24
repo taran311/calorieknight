@@ -47,6 +47,12 @@ void drawHead(Canvas c, Skeleton sk, Look look, double t, {bool still = false}) 
     case HeadKind.magemask:
       _humanHead(c, r, look);
       _mageMask(c, r, look, t, still);
+    case HeadKind.wyrmhelm:
+      _wyrmHelm(c, r, look, t, still);
+    case HeadKind.wyrmcirclet:
+      _humanHead(c, r, look);
+      _hair(c, r, look);
+      _wyrmCirclet(c, r, look);
   }
   if (look.crown && look.head != HeadKind.wizardhat && look.head != HeadKind.orkShaman) _crown(c, r);
   c.restore();
@@ -1080,4 +1086,98 @@ void _mageMask(Canvas c, double r, Look look, double t, bool still) {
   // A gem on the brow.
   c.drawCircle(Offset(r * .55, -r * .7), r * .13, Paint()..color = glow);
   c.drawCircle(Offset(r * .55, -r * .7), r * .13, strokePaint(shade(col[2], -.2), .9));
+}
+
+/// A swept-back horn from the temple ([dir] -1 behind), ivory with ridges.
+void _horn(Canvas c, Offset root, double r, {double size = 1}) {
+  const ivory = [Color(0xFFFFF8E6), Color(0xFFE2D4B0), Color(0xFF7A6A48)];
+  final p = Path()
+    ..moveTo(root.dx + r * .25 * size, root.dy)
+    ..quadraticBezierTo(root.dx - r * .5 * size, root.dy - r * .9 * size, root.dx - r * 1.7 * size, root.dy - r * .95 * size)
+    ..quadraticBezierTo(root.dx - r * .7 * size, root.dy - r * .5 * size, root.dx - r * .25 * size, root.dy + r * .25 * size)
+    ..close();
+  fillPath(c, p, ivory, root - Offset(r * 1.7 * size, r), root + Offset(r * .3, r * .3), width: 1.4);
+  for (var i = 1; i <= 3; i++) {
+    final k = i / 4;
+    final a = Offset(root.dx - r * (.15 + 1.1 * k) * size, root.dy - r * (.15 + .55 * k) * size);
+    c.drawLine(a, a + Offset(r * .08, r * .22 * size * (1 - k)), strokePaint(const Color(0x667A6A48), 1));
+  }
+}
+
+/// The wyrmhelm: a close helm in the dragon's colour, its crest a row of spines running back, two
+/// horns swept back from the temples, scaled cheek guards, and a dark visor slit that glows when
+/// the armour does.
+void _wyrmHelm(Canvas c, double r, Look look, double t, bool still) {
+  final col = look.helm ?? ramp(0xFF8B939C);
+  // Spines along the crest, behind the helm.
+  for (var i = 0; i < 5; i++) {
+    final x = r * .5 - i * r * .42, y = -r * 1.12 + i * r * .12;
+    fillPath(
+      c,
+      Path()
+        ..moveTo(x, y + r * .12)
+        ..lineTo(x - r * .35, y - r * (.55 - i * .06))
+        ..lineTo(x - r * .3, y + r * .2)
+        ..close(),
+      col,
+      Offset(x - r * .3, y - r * .5),
+      Offset(x, y + r * .2),
+      width: 1.2,
+    );
+  }
+  _horn(c, Offset(-r * .2, -r * .7), r);
+  final h = Path()
+    ..moveTo(-r * 1.0, r * 1.0)
+    ..lineTo(-r * 1.05, -r * .4)
+    ..quadraticBezierTo(-r * .95, -r * 1.22, r * .15, -r * 1.22)
+    ..quadraticBezierTo(r * 1.08, -r * 1.15, r * 1.18, -r * .35)
+    // The face plate juts forward into a brow ridge.
+    ..lineTo(r * 1.32, -r * .05)
+    ..lineTo(r * 1.14, r * .3)
+    ..lineTo(r * 1.2, r * .95)
+    ..quadraticBezierTo(r * .1, r * 1.25, -r * 1.0, r * 1.0)
+    ..close();
+  fillPath(c, h, col, Offset(-r, -r), Offset(r * 1.1, r));
+  c.save();
+  c.clipPath(h);
+  // Scales over the cheek guard.
+  final edge = strokePaint(shade(col[1], -.35).withValues(alpha: .7), .9);
+  for (var row = 0; row < 3; row++) {
+    for (var col2 = 0; col2 < 3; col2++) {
+      final o = Offset(-r * .55 + col2 * r * .42 + (row.isOdd ? r * .21 : 0), r * .1 + row * r * .3);
+      c.drawArc(Rect.fromCenter(center: o, width: r * .42, height: r * .34), 0, math.pi, false, edge);
+    }
+  }
+  _ellipse(c, Offset(-r * .2, -r * .78), r * .6, r * .22, Paint()..color = const Color(0x33FFFFFF), -.2);
+  c.restore();
+  // The near horn, over the helm.
+  _horn(c, Offset(r * .05, -r * .62), r, size: 1.1);
+  final glow = look.armourGlow;
+  final slit = Path()
+    ..moveTo(r * .35, -r * .28)
+    ..lineTo(r * 1.22, -r * .12)
+    ..lineTo(r * 1.15, r * .02)
+    ..lineTo(r * .38, -r * .12)
+    ..close();
+  if (glow != null) {
+    final pulse = still ? .8 : .65 + .35 * math.sin(t / 400);
+    c.drawPath(slit, Paint()..color = glow.withValues(alpha: .7 * pulse)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+  }
+  c.drawPath(slit, Paint()..color = glow ?? const Color(0xFF08090B));
+}
+
+/// A wyrmhorn circlet: a band in the dragon's colour with a gem, and two small horns swept back.
+void _wyrmCirclet(Canvas c, double r, Look look) {
+  final col = look.helm ?? ramp(0xFFC9A24E);
+  _horn(c, Offset(-r * .35, -r * .62), r, size: .7);
+  final band = Path()
+    ..moveTo(-r * .95, -r * .4)
+    ..quadraticBezierTo(0, -r * .78, r * .95, -r * .58);
+  c.drawPath(band, strokePaint(outline, 5));
+  c.drawPath(band, strokePaint(col[1], 3.2));
+  c.drawPath(band, strokePaint(col[0].withValues(alpha: .7), 1));
+  _horn(c, Offset(-r * .05, -r * .66), r, size: .78);
+  final gem = Offset(r * .72, -r * .62);
+  c.drawCircle(gem, r * .16, Paint()..color = outline);
+  c.drawCircle(gem, r * .12, Paint()..color = look.armourGlow ?? const Color(0xFFE0502A));
 }

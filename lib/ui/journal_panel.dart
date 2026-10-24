@@ -34,12 +34,12 @@ class JournalPanel extends StatelessWidget {
         children: [
           Tabs<JournalTab>(
             onParchment: true,
-            items: const [(JournalTab.rations, "Today's rations"), (JournalTab.log, 'Battle log')],
+            items: const [(JournalTab.rations, "Today's food"), (JournalTab.log, 'Battle log')],
             selected: c.journalTab,
             onSelect: c.setJournalTab,
           ),
           const SizedBox(height: 10),
-          if (c.journalTab == JournalTab.rations) _Rations(controller: c, onSampleDay: onSampleDay) else _BattleLog(entries: c.state.journal),
+          if (c.journalTab == JournalTab.rations) _Rations(controller: c, onSampleDay: onSampleDay) else JournalEntryList(entries: c.state.journal),
         ],
       ),
     );
@@ -80,13 +80,13 @@ class _Rations extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(child: Text('Rations', style: Txt.inkLabel(size: 17))),
+            Expanded(child: Text('Food & stamina', style: Txt.inkLabel(size: 17))),
             Text.rich(
               TextSpan(
                 children: [
                   TextSpan(text: fmt(t.kcal), style: Txt.inkLabel(size: 18)),
                   TextSpan(
-                    text: ' / ${fmt(a)} kcal',
+                    text: ' / ${fmt(a)} stamina (kcal)',
                     style: Txt.body(size: 13.5, color: Palette.inkSoft),
                   ),
                 ],
@@ -96,7 +96,7 @@ class _Rations extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Tooltip(
-          message: 'The marked band is a balanced day: 90% to 105% of your allowance',
+          message: 'The marked band is fully fuelled, a balanced day: 90% to 105% of your stamina',
           child: SizedBox(
             height: 14,
             child: LayoutBuilder(
@@ -260,8 +260,9 @@ class FoodTagChip extends StatelessWidget {
   }
 }
 
-class _BattleLog extends StatelessWidget {
-  const _BattleLog({required this.entries});
+/// The battle log, newest first.
+class JournalEntryList extends StatelessWidget {
+  const JournalEntryList({super.key, required this.entries});
   final List<JournalEntry> entries;
 
   @override

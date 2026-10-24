@@ -11,14 +11,17 @@ import 'package:calorieknight/game/loot.dart';
 import 'package:calorieknight/game/engine.dart';
 import 'package:calorieknight/game/models.dart';
 import 'package:calorieknight/game/mounts.dart';
+import 'package:calorieknight/game/night.dart';
 import 'package:calorieknight/game/heists.dart';
 import 'package:calorieknight/game/quests.dart';
 import 'package:calorieknight/game/rules.dart';
 import 'package:calorieknight/game/spells.dart';
 import 'package:calorieknight/game/world_boss.dart';
+import 'package:calorieknight/services/food_amounts.dart';
 import 'package:calorieknight/services/food_book.dart';
 import 'package:calorieknight/services/food_resolver.dart';
 import 'package:calorieknight/services/food_tags.dart';
+import 'package:calorieknight/services/goal_maths.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 LoggedFood food(String name) => LoggedFood.of(sampleFoods.firstWhere((f) => f.name == name));
@@ -566,7 +569,7 @@ void foodTests() {
         expect(kill.questReward!.contains('special attack'), isTrue);
       }
     }
-    expect(weapons, inInclusiveRange(30, 85));
+    expect(weapons, inInclusiveRange(30, 95));
   });
 
   test('pickpocketing and stealing: odds, good and bad outcomes, wanted, ambushes', () {
@@ -634,8 +637,8 @@ void foodTests() {
           hits++;
         }
       }
-      // Weak swings after the sixth log draw no counter.
-      expect(rs.skip(6).every((r) => r.counter == null), isTrue);
+      // Past the sixth log the foe still swings, but it never costs HP.
+      expect(rs.skip(6).every((r) => r.counter == 0), isTrue);
       expect(e.state.knight.hp >= 1, isTrue);
     }
     expect(dodges, inInclusiveRange(40, 300));
@@ -1611,5 +1614,132 @@ void foodTests() {
     for (final c in HeroClass.values) {
       expect(specials[classSpecial(c)] != null, isTrue);
     }
+  });
+  test('logging food: typed names, amounts that keep the name in step, energy and the tour flag', () {
+    final r = ResolvedFood(query: 'linda mccartney sausages', name: 'Linda McCartney 6 Vegan Sausages', portion: '1 sausage (42g)', calories: 100, protein: 8, carbs: 6, fat: 5, source: 'fatsecret', confidence: .9);
+    final f = FoodItem.resolved(r);
+    expect(f.name, 'Linda mccartney sausages');
+    expect(f.matchedName, 'Linda McCartney 6 Vegan Sausages');
+    expect(FoodItem.fromJson(jsonDecode(jsonEncode(f.toJson())) as Map<String, dynamic>).matchedName, f.matchedName);
+    // Two portions: same name, doubled energy.
+    final two = withAmount(f, 2);
+    expect(two.kcal, 200);
+    expect(two.name, f.name);
+    // A count in the name follows the amount.
+    final four = FoodItem(name: '4 vegan sausages', calories: 50, portion: '1 sausage');
+    expect(withAmount(four, .5).name, '2 vegan sausages');
+    // A weight in the name follows it too, and becomes the single portion.
+    final pb = FoodItem(name: '20g peanut butter', calories: 120, portion: '20g');
+    final less = withAmount(pb, .75);
+    expect(less.name, '15g peanut butter');
+    expect(less.multiplier, 1);
+    expect(less.kcal, 90);
+    expect(hasAmount('pasta'), isFalse);
+    expect(hasAmount('150g pasta'), isTrue);
+    expect(hasAmount('2 crumpets'), isTrue);
+    expect(shownPortion('100 g', 2.5), '250 g');
+    final st = Settings()..tourSeen = true;
+    expect(Settings.fromJson(jsonDecode(jsonEncode(st.toJson())) as Map<String, dynamic>).tourSeen, isTrue);
+  });
+  test('the night road: opens after a logged day is closed, once a night, small finds', () {
+    final e = GameEngine(GameEngine.newGame(heroClass: HeroClass.ranger), random: Random(5));
+    expect(e.nightReady, isFalse);
+    e.rest();
+    expect(e.nightReady, isFalse); // nothing was logged
+    e.state.foeHp = e.state.foeMax = 100000;
+    e.logFood(food('Apple'));
+    e.rest();
+    expect(e.nightReady, isTrue);
+    expect(e.nightChoices.length, 3);
+    final coins = e.state.knight.coins;
+    final r = e.walkNight(e.nightChoices.first)!;
+    expect(r.story.isNotEmpty, isTrue);
+    if (r.find == NightFind.gold || r.find == NightFind.goldMore) expect(e.state.knight.coins, coins + r.gold);
+    expect(e.walkNight(e.nightChoices.first) == null, isTrue);
+    expect(e.nightReady, isFalse);
+    expect(GameState.fromJson(jsonDecode(jsonEncode(e.state.toJson())) as Map<String, dynamic>).nightDoneDay, e.state.day);
+  });
+  test('stamina set-up: The Calorie Card sums, shares from grams, and the saved plan', () {
+    // 30, 175 cm, 80 kg, male, moderately active: Mifflin-St Jeor 1,749 × 1.55.
+    final m = maintenanceCalories(age: 30, heightCm: 175, weightKg: 80, male: true, exerciseLevel: 2)!;
+    expect(m.round(), 2711);
+    final floor = safeMinimumCalories(male: false, resting: 1100);
+    expect(floor, 1200);
+    expect(paceCalories(m, 'lose', .5, floor: 1500), (m - 550).round());
+    expect(paceCalories(1400, 'lose', .75, floor: 1200), 1200);
+    final (c, p, f) = sharesFromGrams(150, 200, 67);
+    expect(c + p + f, 100);
+    expect(p, 30);
+    final st = Settings()..plan = PlanProfile(male: false, age: 34, heightCm: 165, weightKg: 70, activity: 1, mode: 'lose', goalKg: 64, pace: .5);
+    final back = Settings.fromJson(jsonDecode(jsonEncode(st.toJson())) as Map<String, dynamic>);
+    expect(back.plan!.goalKg, 64);
+    expect(back.plan!.male, isFalse);
+    expect(Settings().plan == null, isTrue);
+  });
+  test('food from The Calorie Card only strikes once', () {
+    final st = GameEngine.newGame()..cardTaken.addAll(['a', 'b']);
+    final back = GameState.fromJson(jsonDecode(jsonEncode(st.toJson())) as Map<String, dynamic>);
+    expect(back.cardTaken.join(','), 'a,b');
+    final f = FoodItem(name: 'Oats', calories: 150, cardId: 'x1', meal: 'Breakfast');
+    expect(f.copy().cardId, 'x1');
+    expect(f.toLogged(f.meal!).meal, 'Breakfast');
+  });
+  test('a fairy companion: a light bite and a charm every few full swings, in turn', () {
+    final e = GameEngine(GameEngine.newGame(heroClass: HeroClass.mage), random: Random(3));
+    final k = e.state.knight;
+    k.pets[Pet.fairy.name] = 300; // a pixie: a charm every 3rd full swing
+    k.activePet = Pet.fairy.name;
+    e.state.foeHp = e.state.foeMax = 100000;
+    final rs = [for (var i = 0; i < 6; i++) e.logFood(food('Apple'))];
+    final charms = [for (final r in rs) if (r.charm != null) r.charm!];
+    expect(charms.length, 2);
+    expect(charms.first, FairyCharm.slumber);
+    expect(charms.last, FairyCharm.enfeeble);
+    expect(rs.every((r) => r.pet?.$1 == Pet.fairy), isTrue);
+  });
+  test('wyrmscale: dragons drop pieces in their colour, and they strike dragons harder', () {
+    final t = LootTable(Random(4));
+    final elder = wyrmTierFor('elderWyrm')!;
+    expect(elder.tier, 5);
+    final suit = t.wyrmDrop(HeroClass.knight, 30, elder, only: GearSlot.armour);
+    expect(suit.art, 'wyrm-knight-5');
+    expect(armourTierById(suit.art).reduction > .45, isTrue);
+    expect(suit.rarity, Rarity.legendary);
+    final blade = t.wyrmDrop(HeroClass.knight, 30, elder, only: GearSlot.weapon);
+    expect(blade.art, 'wyrmblade');
+    expect(blade.stat(Stat.wyrmbane), 14);
+    final e = GameEngine(GameEngine.newGame(heroClass: HeroClass.knight), random: Random(2));
+    e.state.knight.loadouts[HeroClass.knight]!.weapon = blade;
+    e.state.foe = foes.indexWhere((f) => f.look == 'frostWyrm');
+    final vsDragon = swingDamage(e.state, 0, .99, hitRoll: .99).base;
+    e.state.knight.loadouts[HeroClass.knight]!.weapon = GearItem(id: 'x', name: 'Same', slot: GearSlot.weapon, art: 'wyrmblade', rarity: blade.rarity, level: 30, value: 1, heroClass: HeroClass.knight, stats: {for (final s in blade.stats.entries) if (s.key != Stat.wyrmbane) s.key: s.value});
+    final plain = swingDamage(e.state, 0, .99, hitRoll: .99).base;
+    expect(vsDragon, greaterThan(plain));
+    // Dragons drop them.
+    var drops = 0;
+    for (var seed = 0; seed < 200; seed++) {
+      final g = GameEngine(GameEngine.newGame(heroClass: HeroClass.ranger), random: Random(seed));
+      g.state.foe = foes.indexWhere((f) => f.look == 'wyvern');
+      g.state.foeHp = 0;
+      g.logFood(food('Apple'));
+      if (g.state.pendingLoot.any((x) => x.gearSet == wyrmSet)) drops++;
+    }
+    expect(drops, inInclusiveRange(15, 70));
+  });
+  test('dragonbone jewellery: from dragons and the bone carver, striking dragons harder', () {
+    final t = LootTable(Random(5));
+    final ring = t.dragonboneJewel(20, wyrmTiers[2], ring: true);
+    expect(ring.slot, GearSlot.ring);
+    expect(ring.heroClass == null, isTrue);
+    expect(ring.stat(Stat.wyrmbane), 5);
+    final amulet = t.dragonboneJewel(20, wyrmTiers[4], ring: false);
+    expect(amulet.slot, GearSlot.trinket);
+    expect(amulet.rarity, Rarity.legendary);
+    final e = GameEngine(GameEngine.newGame(heroClass: HeroClass.mage), random: Random(1));
+    e.state.knight.coins = 10000;
+    expect(e.purchase('bonecarver'), isTrue);
+    final got = e.state.pendingLoot.last;
+    expect(got.art == 'dragonbonering' || got.art == 'fangamulet', isTrue);
+    expect(got.name.startsWith('Ashen'), isTrue); // the first lands: Ash Wyvern bone
   });
 }

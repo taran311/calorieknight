@@ -159,6 +159,12 @@ class MerchantWares extends StatelessWidget {
         heading('Kit'),
         ware(const ItemIcon(Item.gauntlets), glovesName(k.heroClass), '+3 damage per swing', buy('gloves')),
         ware(const Icon(Icons.hiking, color: Color(0xFFB08A5A), size: 26), 'Cobbler\'s boots', 'A plain pair for empty feet. Better boots, with dodge, guard or vigour, come from battle', buy('boots')),
+        ware(
+          const Icon(Icons.diamond_outlined, color: Color(0xFFE8DCC0), size: 26),
+          'Bone carver\'s pouch',
+          'A dragonbone ring or fang amulet that strikes dragons harder, carved from the dragons of the lands you\'ve reached. Obsidian and Elder pieces only come from the dragons themselves',
+          buy('bonecarver'),
+        ),
         ware(const Icon(Icons.diamond_outlined, color: Color(0xFF9ADFFF), size: 26), 'Jeweller\'s box', 'A ring you can\'t see until it\'s open: uncommon to epic, and once in a while legendary or part of a set', buy('ringbox')),
         heading('Dyes'),
         for (final d in dyes.where((d) => !d.supporter || k.supporter))

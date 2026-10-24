@@ -45,6 +45,8 @@ enum HeadKind {
   banshee,
   witch,
   magemask,
+  wyrmhelm,
+  wyrmcirclet,
 }
 
 enum TorsoKind { plain, leather, studded, scales, mail, plate, robe, fur, rags, ribs, bark, stone }
@@ -53,6 +55,7 @@ enum Weapon {
   none,
   longsword,
   greatsword,
+  wyrmblade,
   shortsword,
   falchion,
   dagger,
@@ -110,7 +113,10 @@ enum Weapon {
   bool get isThrown => this == chakram || this == throwingknives;
   bool get isGun => this == handcannon || this == cannon;
 
-  bool get twoHanded => this == greatsword || this == greataxe || this == heartmaul || this == trident || isStaff || isBow;
+  /// Big two-handed blades held in both hands (drawn behind the body).
+  bool get bigBlade => this == greatsword || this == wyrmblade;
+
+  bool get twoHanded => this == greatsword || this == wyrmblade || this == greataxe || this == heartmaul || this == trident || isStaff || isBow;
 }
 
 enum ShieldKind { kite, round, buckler, tower }
@@ -177,6 +183,10 @@ class Look {
     this.wings,
     this.tail,
     this.ghostly = false,
+    this.armourGlow,
+    this.wyrmHorns = false,
+    this.wyrmGloves = false,
+    this.wyrmBoots = false,
   });
 
   final String build;
@@ -225,6 +235,13 @@ class Look {
 
   /// A spirit (ghosts, banshees): see-through, faintly glowing, and trailing a wisp instead of legs.
   final bool ghostly;
+
+  /// Enchanted or high-tier wyrmscale glows softly in its dragon's colour.
+  final Color? armourGlow;
+
+  /// Wyrmscale's horns: on the shoulders, elbows, forearms and knees (the armour), the knuckles
+  /// (gloves), and the heels and toes (boots).
+  final bool wyrmHorns, wyrmGloves, wyrmBoots;
 }
 
 /// Glow colour for a gear element, or null for plain steel.
@@ -259,6 +276,8 @@ HeadKind _headFor(HeroClass c, GearItem? helm) {
     'rangerhood' => HeadKind.rangerhood,
     'mask' => HeadKind.rangermask,
     'moonmask' || 'sunmask' || 'spiritmask' => HeadKind.magemask,
+    'wyrmhelm' => HeadKind.wyrmhelm,
+    'wyrmcirclet' => HeadKind.wyrmcirclet,
     _ => c == HeroClass.knight ? HeadKind.greathelm : HeadKind.bare,
   };
 }
@@ -288,6 +307,27 @@ Ramp? _maskRamp(String? art) => switch (art) {
   'spiritmask' => ramp(0xFFF4F0E6, .2, .45),
   _ => null,
 };
+
+/// The dragon tier of a wyrmscale piece (from its colour), or null for anything else.
+WyrmTier? _wyrmOf(GearItem? g) => g == null || g.gearSet != wyrmSet ? null : wyrmTiers.where((w) => w.argb == g.tint).firstOrNull;
+
+/// The glow of enchanted or high-tier wyrmscale: its armour (Obsidian and Elder always glow, any
+/// enchanted), or an enchanted or legendary wyrmscale helm, gloves, boots or weapon.
+Color? _wyrmGlow(Loadout l) {
+  final at = wyrmTierOfArmour(l.armour);
+  if (at != null && (at >= 4 || l.armourEnchant != null)) return Color(wyrmTiers[at - 1].trim);
+  for (final g in [l.weapon, l.helm, l.gloves, l.boots]) {
+    final w = _wyrmOf(g);
+    if (w != null && (g!.enchant != null || g.rarity == Rarity.legendary)) return Color(w.trim);
+  }
+  return null;
+}
+
+/// A wyrmscale helm's colour.
+Ramp? _wyrmHelm(GearItem? helm) {
+  final w = _wyrmOf(helm);
+  return w == null ? null : ramp(w.argb, .32, .5);
+}
 
 /// The player's hero, built from their class, armour tier, loot and dye.
 Look heroLook(Knight k) => lookFor(k.heroClass, k.loadout, dye: k.dye, gloves: k.gloves, poisoned: k.poisonDays > 0, trinket: k.trinket);
@@ -328,14 +368,18 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         boot: boot,
         knee: plate ? m : null,
         elbow: plate ? m : null,
-        pauldron: plate ? m : ramp(0xFF6E4A2E),
+        pauldron: plate || wyrmTierOfArmour(l.armour) != null ? m : ramp(0xFF6E4A2E),
         tabard: dyeCol,
         trim: const Color(0xFFC9A24E),
         emblem: 'ck',
         cape: capeCol ?? shade(dyeCol, -.15),
         head: head,
-        helm: plate && head != HeadKind.nasal ? m : helmSteel,
+        helm: _wyrmHelm(l.helm) ?? (plate && head != HeadKind.nasal ? m : helmSteel),
         plume: head == HeadKind.greathelm || head == HeadKind.sallet ? dyeCol : null,
+        armourGlow: _wyrmGlow(l),
+        wyrmHorns: wyrmTierOfArmour(l.armour) != null,
+        wyrmGloves: _wyrmOf(l.gloves) != null,
+        wyrmBoots: _wyrmOf(l.boots) != null,
         weapon: weapon == Weapon.none ? Weapon.longsword : weapon,
         offhand: off,
         poisoned: poisoned,
@@ -346,8 +390,9 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         shield: shield == null ? null : ShieldLook(field: dyeCol, kind: shield, trim: o!.rarity.index >= Rarity.epic.index ? const Color(0xFFF3DC8E) : const Color(0xFFC9A24E)),
       );
     case HeroClass.mage:
-      final robe = ramp(_robes[l.armour] ?? 0xFF6E6252, .3, .5);
-      final trim = l.armour == 'archmage' || l.armour == 'astral' || l.armour == 'oathrobe' ? const Color(0xFFE2C46A) : (l.armour == 'bonerobe' ? const Color(0xFF6A5A44) : shade(robe[1], .35));
+      final mw = wyrmTierOfArmour(l.armour), mwt = mw == null ? null : wyrmTiers[mw - 1];
+      final robe = ramp(mwt?.argb ?? _robes[l.armour] ?? 0xFF6E6252, .3, .5);
+      final trim = mwt != null ? Color(mwt.trim) : l.armour == 'archmage' || l.armour == 'astral' || l.armour == 'oathrobe' ? const Color(0xFFE2C46A) : (l.armour == 'bonerobe' ? const Color(0xFF6A5A44) : shade(robe[1], .35));
       return Look(
         build: 'human',
         stance: Stance.mage,
@@ -367,7 +412,11 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         cape: capeCol ?? (l.armour == 'apprentice' ? null : shade(robe[1], -.25)),
         head: head,
         hatColour: dyeCol,
-        helm: _maskRamp(l.helm?.art) ?? helmSteel,
+        helm: _wyrmHelm(l.helm) ?? _maskRamp(l.helm?.art) ?? helmSteel,
+        armourGlow: _wyrmGlow(l),
+        wyrmHorns: wyrmTierOfArmour(l.armour) != null,
+        wyrmGloves: _wyrmOf(l.gloves) != null,
+        wyrmBoots: _wyrmOf(l.boots) != null,
         hair: const Color(0xFF5A4630),
         beard: l.armour == 'archmage' || l.armour == 'astral' ? const Color(0xFFD8D2C4) : null,
         weapon: weapon == Weapon.none ? Weapon.staff : weapon,
@@ -379,8 +428,9 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         weaponRarity: w == null || w.rarity == Rarity.common ? null : Color(w.rarity.argb),
       );
     case HeroClass.ranger:
-      final leather = ramp(_leathers[l.armour] ?? 0xFF7A5233, .28, .5);
-      final dark = l.armour == 'shadowweave', dragon = l.armour == 'dragonhide';
+      final rw = wyrmTierOfArmour(l.armour);
+      final leather = ramp(rw != null ? wyrmTiers[rw - 1].argb : (_leathers[l.armour] ?? 0xFF7A5233), .28, .5);
+      final dark = l.armour == 'shadowweave', dragon = l.armour == 'dragonhide' || rw != null;
       return Look(
         build: 'lean',
         stance: Stance.ranger,
@@ -390,9 +440,9 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         upper: dragon ? leather : ramp(dark ? 0xFF24222A : 0xFF4E5A3A, .25, .5),
         fore: leather,
         hand: gl ?? (gloves ? ramp(0xFF3A2A1A, .25, .5) : skin),
-        thigh: dragon ? ramp(0xFF24523A, .25, .5) : ramp(dark ? 0xFF1E1C22 : 0xFF4A4232, .2, .5),
+        thigh: dragon ? (rw != null ? rampOf(shade(Color(wyrmTiers[rw - 1].argb), -.25), .25, .5) : ramp(0xFF24523A, .25, .5)) : ramp(dark ? 0xFF1E1C22 : 0xFF4A4232, .2, .5),
         shin: dragon ? leather : ramp(0xFF4A3220, .2, .5),
-        pauldron: dragon ? ramp(0xFF3E7A52, .3, .5) : null,
+        pauldron: dragon ? (rw != null ? ramp(wyrmTiers[rw - 1].argb, .35, .5) : ramp(0xFF3E7A52, .3, .5)) : null,
         boot: bt ?? ramp(0xFF3A2616, .2, .5),
         belt: const Color(0xFF2A1A0E),
         pouch: true,
@@ -401,6 +451,11 @@ Look lookFor(HeroClass c, Loadout l, {String dye = 'crimson', bool gloves = fals
         head: head,
         hood: ramp(dark ? 0xFF24202A : 0xFF3E5232, .25, .55),
         mask: ramp(0xFF2A2A26, .15, .5),
+        helm: _wyrmHelm(l.helm),
+        armourGlow: _wyrmGlow(l),
+        wyrmHorns: wyrmTierOfArmour(l.armour) != null,
+        wyrmGloves: _wyrmOf(l.gloves) != null,
+        wyrmBoots: _wyrmOf(l.boots) != null,
         hatColour: dyeCol,
         hair: const Color(0xFF6A4424),
         quiver: const Color(0xFF6E4A2A),

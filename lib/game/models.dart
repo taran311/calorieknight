@@ -17,6 +17,8 @@ class Settings {
     this.peaceful = false,
     this.innScene = true,
     this.foodCountry,
+    this.tourSeen = false,
+    this.plan,
   });
 
   String name;
@@ -25,6 +27,13 @@ class Settings {
 
   /// Two-letter country foods are looked up for; null follows the device.
   String? foodCountry;
+
+  /// The camp's spotlight tour (energy, logging, the foe, the Inn) has been shown.
+  bool tourSeen;
+
+  /// What the stamina allowance was worked out from (The Calorie Card's set-up questions), or
+  /// null before set-up.
+  PlanProfile? plan;
 
   Settings copy() => Settings.fromJson(toJson());
 
@@ -38,6 +47,8 @@ class Settings {
     'peaceful': peaceful,
     'innScene': innScene,
     if (foodCountry != null) 'foodCountry': foodCountry,
+    if (tourSeen) 'tour': true,
+    if (plan != null) 'plan': plan!.toJson(),
   };
 
   factory Settings.fromJson(Map<String, dynamic> j) => Settings(
@@ -50,7 +61,78 @@ class Settings {
     peaceful: j['peaceful'] as bool? ?? false,
     innScene: j['innScene'] as bool? ?? true,
     foodCountry: j['foodCountry'] as String?,
+    tourSeen: j['tour'] == true,
+    plan: j['plan'] is Map ? PlanProfile.fromJson((j['plan'] as Map).cast<String, dynamic>()) : null,
   );
+}
+
+/// The answers behind the allowance, as The Calorie Card asks them: about you, your goal and how
+/// fast. Everything metric (kg, cm); [units] and [weightUnit] say how to show it.
+class PlanProfile {
+  PlanProfile({
+    this.male = true,
+    this.age,
+    this.heightCm,
+    this.weightKg,
+    this.activity = 0,
+    this.mode = 'maintain',
+    this.goalKg,
+    this.pace,
+    this.units = 'metric',
+    this.weightUnit = 'kg',
+    this.source = 'calculated',
+  });
+
+  bool male;
+  int? age;
+  double? heightCm, weightKg, goalKg, pace;
+
+  /// 0 (little or none) to 4 (10+ hours a week).
+  int activity;
+
+  /// 'lose', 'maintain' or 'gain'.
+  String mode;
+  String units, weightUnit;
+
+  /// 'calculated', 'manual' (their own number) or 'calorie_card' (pulled from The Calorie Card).
+  String source;
+
+  Map<String, dynamic> toJson() => {
+    'male': male,
+    if (age != null) 'age': age,
+    if (heightCm != null) 'h': heightCm,
+    if (weightKg != null) 'w': weightKg,
+    'act': activity,
+    'mode': mode,
+    if (goalKg != null) 'goal': goalKg,
+    if (pace != null) 'pace': pace,
+    'units': units,
+    'wu': weightUnit,
+    'src': source,
+  };
+
+  factory PlanProfile.fromJson(Map<String, dynamic> j) => PlanProfile(
+    male: j['male'] != false,
+    age: (j['age'] as num?)?.toInt(),
+    heightCm: (j['h'] as num?)?.toDouble(),
+    weightKg: (j['w'] as num?)?.toDouble(),
+    activity: (j['act'] as num?)?.toInt() ?? 0,
+    mode: j['mode'] as String? ?? 'maintain',
+    goalKg: (j['goal'] as num?)?.toDouble(),
+    pace: (j['pace'] as num?)?.toDouble(),
+    units: j['units'] as String? ?? 'metric',
+    weightUnit: j['wu'] as String? ?? 'kg',
+    source: j['src'] as String? ?? 'calculated',
+  );
+}
+
+/// Grams of protein, carbs and fat as CalorieKnight's shares of calories (whole percentages that
+/// add up to 100): (carbs, protein, fat).
+(int, int, int) sharesFromGrams(num protein, num carbs, num fat) {
+  final p = protein * 4, c = carbs * 4, f = fat * 9, total = p + c + f;
+  if (total <= 0) return (40, 30, 30);
+  final pp = (p / total * 100).round(), ff = (f / total * 100).round();
+  return (100 - pp - ff, pp, ff);
 }
 
 enum Status { ale, sluggish, sugarCrash, inspired }
@@ -386,7 +468,12 @@ class GameState {
     this.mendedToday = false,
     this.mirror = 0,
     this.foeAsleep = 0,
+    this.fairyCharge = 0,
+    this.fairyNext = 0,
     this.aidDay = -1,
+    this.nightDay = -1,
+    List<String>? cardTaken,
+    this.nightDoneDay = -1,
     Map<String, int>? deedCounts,
     Set<String>? deedsDone,
     Set<String>? pantry,
@@ -422,6 +509,7 @@ class GameState {
     this.foeWeakened = 0,
     this.foeExposed = 0,
   }) : deedCounts = deedCounts ?? {},
+       cardTaken = cardTaken ?? [],
        deedsDone = deedsDone ?? {},
        pantry = pantry ?? {},
        settings = settings ?? Settings(),
@@ -459,8 +547,18 @@ class GameState {
   /// Counters the foe will sleep through (Slumber).
   int foeAsleep;
 
+  /// A fairy companion: full swings towards its next charm, and which charm is next.
+  int fairyCharge, fairyNext;
+
   /// The game day a friend last came to your aid (once a day).
   int aidDay;
+
+  /// The night road: the game day it opened (after closing a day with food logged), and the day
+  /// it was last walked. Once a night.
+  int nightDay, nightDoneDay;
+
+  /// Calorie Card food already struck with here (its entry ids), so nothing strikes twice.
+  final List<String> cardTaken;
 
   /// Deeds: food-challenge counts, deeds already rewarded, every wholesome food logged, the
   /// healthy streak (and the best one), friends who joined from your invite, and who invited you.
@@ -538,7 +636,12 @@ class GameState {
     if (mendedToday) 'mended': true,
     if (mirror > 0) 'mirror': mirror,
     if (foeAsleep > 0) 'asleep': foeAsleep,
+    if (fairyCharge > 0) 'fairyCharge': fairyCharge,
+    if (fairyNext > 0) 'fairyNext': fairyNext,
     if (aidDay >= 0) 'aid': aidDay,
+    if (nightDay >= 0) 'night': nightDay,
+    if (nightDoneDay >= 0) 'nightDone': nightDoneDay,
+    if (cardTaken.isNotEmpty) 'cardTaken': cardTaken,
     if (deedCounts.isNotEmpty) 'deedCounts': deedCounts,
     if (deedsDone.isNotEmpty) 'deedsDone': deedsDone.toList(),
     if (pantry.isNotEmpty) 'pantry': pantry.toList(),
@@ -599,7 +702,12 @@ class GameState {
       mendedToday: j['mended'] == true,
       mirror: (j['mirror'] as num?)?.toInt() ?? 0,
       foeAsleep: (j['asleep'] as num?)?.toInt() ?? 0,
+      fairyCharge: (j['fairyCharge'] as num?)?.toInt() ?? 0,
+      fairyNext: (j['fairyNext'] as num?)?.toInt() ?? 0,
       aidDay: (j['aid'] as num?)?.toInt() ?? -1,
+      nightDay: (j['night'] as num?)?.toInt() ?? -1,
+      nightDoneDay: (j['nightDone'] as num?)?.toInt() ?? -1,
+      cardTaken: [for (final x in (j['cardTaken'] as List?) ?? const []) '$x'],
       deedCounts: {for (final e in ((j['deedCounts'] as Map?) ?? {}).entries) e.key as String: (e.value as num).toInt()},
       deedsDone: ((j['deedsDone'] as List?) ?? []).cast<String>().toSet(),
       pantry: ((j['pantry'] as List?) ?? []).cast<String>().toSet(),

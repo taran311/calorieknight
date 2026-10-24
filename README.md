@@ -15,6 +15,8 @@ flutter test
 flutter run -d chrome          # or an Android device/emulator
 ```
 
+**On the web, use `run_web.bat`** (`flutter run -d web-server --web-port 5050`, then open http://localhost:5050 in your normal Chrome). Saves are kept in the browser, and `flutter run -d chrome` opens Chrome with a brand-new throwaway profile every run, so each run would start a fresh hero. Press `r` in the terminal to reload after changes.
+
 `flutter create .` leaves the existing `lib/`, `test/`, `pubspec.yaml` and `analysis_options.yaml` alone and only adds what's missing.
 
 Needs Flutter 3.27 or newer.
@@ -26,6 +28,21 @@ On the **web**, sign-in uses Firebase Auth in The Calorie Card's project (`auth-
 - Create an account with any real email, sign in with **Google**, or use an existing **Calorie Card account**: they're the same accounts.
 - "Forgot password?" emails a reset link.
 - Each account still gets its own hero and save. These are kept on the device until CalorieKnight's own database is set up; that can be a separate Firestore database inside the same project, so game data never mixes with Calorie Card data.
+
+### Your stamina, and The Calorie Card
+
+After signing up (before choosing a class), CalorieKnight asks The Calorie Card's set-up questions, one per screen: sex, age, height, weight (kg, st/lb or lb), how active you are, your goal, a goal weight and pace. It uses the same sums (`lib/services/goal_maths.dart`, copied from The Calorie Card: Mifflin-St Jeor resting calories × an activity factor, then the pace, never below a safe minimum). The result is your **stamina** a day (fully fuelled), with a protein / carbs / fat split (Balanced, High protein, Low carb or Keto) or your own number.
+
+Because both apps share one account:
+
+- **Already have a Calorie Card?** Set-up finds it (`user_data` for your account) and offers "Use my Calorie Card plan": no questions.
+- **Set up here first?** Your plan is also saved as your Calorie Card plan, in the same fields The Calorie Card's Get started writes, so signing in there skips its set-up. An existing Calorie Card plan is never overwritten.
+- **Profile** has "Your stamina" (answer the questions again) and **Pull my plan from The Calorie Card** (shows its numbers and uses them on a yes).
+- Sign-in and sign-up say it plainly: one account for CalorieKnight and The Calorie Card.
+
+- **Food logged on The Calorie Card** shows in camp's inbox ("From your Calorie Card: 3 foods logged there today"). One tap opens them in Log rations, under their meals, to check and strike with as a combo. Each one can only strike once (`cardTaken`), and the usual rule applies: the first 6 strikes a day are full strength. It's one-way: food logged in CalorieKnight doesn't appear on your Calorie Card.
+
+This reads The Calorie Card's own `user_food` (today's entries), and reads and writes its `user_data` and `users` collections with the signed-in account, which its existing Firestore rules already allow for the owner.
 
 On **Android and iOS**, CalorieKnight's apps need registering in that project first. Run this in this folder:
 
@@ -41,8 +58,8 @@ Until then, the phone builds use the device-only test sign-in. The demo account 
 1. **Sign in / Create an account**
 2. **Choose your path** (once per hero): knight, mage or ranger.
 3. **The app**, with HP, XP and level fixed at the top and a bottom bar like The Calorie Card's (a sidebar on tablets and desktop):
-   - **Camp**: the current foe, **Rest at the Inn**, the merchant, today's rations and the battle log.
-   - **Hero**: your painted hero, equipped gear (tap a piece for its stats), totals, satchel, and **Retrain at the Inn**.
+   - **Camp**, laid out like The Calorie Card's home, with no header above it: the **hero card** (your hero in the realm you're crossing, today's stamina, protein, carbs and fat, HP and XP, your name, the day and your gold; tap it for **Kit & spells**: gear, spellbook, deeds, satchel, Retrain), **Log food** with the meal beside it, "Again for lunch", the **adventure inbox**, and today's food meal by meal (tap a food to remove it). Battle log and How it works sit at the bottom.
+   - **Recipes** (the cookbook): your saved dishes; log a serving and it strikes.
    - **Strike** (the raised round button in the middle): log a meal and watch the attack.
    - **Friends**: add friends, send cheers, the weekly **Hiscores** and the co-op **Raid**.
    - **Profile**: account, username and invite link, settings, sign out.
@@ -168,7 +185,7 @@ Combat runs in turns. Logging a meal is your turn; then, if the foe is still sta
 - **Your meal sets your stance:** 20 g of protein or more gives +15% block. Staying within today's allowance gives +10% parry; going over gives −8%. Fast food or sweets give −5% parry. The battle screen shows your stance after each strike.
 - Thorns gear strikes the foe whenever it hits you.
 - A counter never takes you below 1 HP (only the night can fell you), and Peaceful mode turns counters off.
-- Weak swings after the sixth log draw no counter, so logging every bite is never punished.
+- Past the sixth log the foe still takes its turn (you sidestep or turn it aside), but those exchanges never cost HP, so logging every bite is never punished.
 - The Inn mends a little more each level to keep pace, and the camp card shows roughly how hard the current foe hits.
 
 ## Off-hands
@@ -238,7 +255,7 @@ The merchant's **enchanter** works a random rune onto your weapon or armour for 
 
 ## Mage spells
 
-Mages gather 1 mana on every full swing (up to 5). When there's enough for the **prepared spell**, it casts by itself on that swing. Spells unlock as you level; prepare one in the spellbook on the Hero page.
+Mages gather 1 mana on every full swing (up to 5). When there's enough for the **prepared spell**, it casts by itself on that swing. Spells unlock as you level; prepare one in the spellbook under Kit & spells (tap your hero at camp).
 
 | Level | Spell | Mana | Effect |
 |---|---|---|---|
@@ -262,6 +279,25 @@ Mages gather 1 mana on every full swing (up to 5). When there's enough for the *
 Summoned skeletons stand beside you on the battlefield and strike after each of your blows; they crumble when their time is up or at the end of the day.
 
 **Healing Light** comes late on purpose, around the Elderwood, when foes start hitting hard. It casts by itself before your prepared spell, but only when you're under half health, only once a day, and it spends 3 mana that would have gone on an attack. In the balance runs it raises a mage's lowest HP from about 25 to about 55 without changing how fast they kill.
+
+## Wyrmscale (from dragons)
+
+Every dragon you fell may leave a **wyrmscale** piece made from its scales and bones (18%, rare dragons 35%, bosses 50%), in that dragon's colour. The kind of dragon sets the tier:
+
+| Tier | Dragon | Colour | Rarity | Armour |
+|---|---|---|---|---|
+| 1 | Ash Wyvern | Ashen grey | Rare | −30% |
+| 2 | Moss Dragon | Mossback green | Rare or epic | −34% |
+| 3 | Frost Wyrm | Rimescale ice blue | Epic | −38% |
+| 4 | Obsidian Dragon | Obsidian black, ember trim | Epic or legendary | −42% |
+| 5 | Vorthax the Elder Wyrm | Elder gold | Legendary | −46% |
+
+- **Pieces, for every class:** wyrmplate (knight), wyrmscale robe (mage) or wyrmhide (ranger); a helm (knights: a horned wyrmhelm with a spined crest and a visor slit; mages and rangers: a wyrmhorn circlet); gloves; boots; and a weapon (knights: the **Wyrmbane greatsword**, a blade in the dragon's colour edged with ivory teeth, a horned guard and a fang pommel; mages: a wyrmspine staff; rangers: a wyrmhorn bow).
+- **Horns:** wyrmscale armour grows ivory horns on the shoulders, elbows, forearms, knees and hips; wyrmscale gloves have spiked knuckles, and wyrmscale boots a heel spur and a toe horn (all classes).
+- **Wyrmbane:** every piece makes your swings hit **dragons** harder: weapon +6 to +14%, armour +5 to +13%, helm, gloves and boots +3 to +7% each, up to **+35%** in all. They're good gear against anything else too.
+- **Glow:** Obsidian and Elder armour always glow softly in their trim colour, and so does any enchanted wyrmscale armour, and any enchanted or legendary wyrmscale piece. A quarter of the pieces (not armour) come enchanted. The wyrmhelm's visor glows with it.
+- **Dragonbone jewellery:** a dragon sometimes leaves a **dragonbone ring** (crit and damage: an ivory band ridged like knucklebone, two little horns and a gem in its colour) or a **fang amulet** (vigour and guard) instead, +3 to +7% damage to dragons, any class. The merchant's **Bone carver's pouch** (90 + 12 × level gold) has one of the two, Ashen to Rimescale depending on how far you've travelled; Obsidian and Elder jewellery only comes from the dragons themselves.
+- Named rare dragons (Rimefang, Cinderqueen Ashkara, Glimmerscale) drop their kind's tier at the rare rate.
 
 ## Bone gear (from the undead)
 
@@ -456,7 +492,7 @@ Bloodleech heals you for a share of the damage you deal on full swings, shown as
 
 ## Companions
 
-One companion fights beside you at a time. Choose it under Companions on the Hero page. The one that fights grows with the XP you earn.
+One companion fights beside you at a time. Choose it under Companions in Kit & spells (from your hero at camp). The one that fights grows with the XP you earn.
 
 | Companion | How to get it | Stages | What it does |
 |---|---|---|---|
@@ -465,6 +501,20 @@ One companion fights beside you at a time. Choose it under Companions on the Her
 | **Wolf** | Merchant, 150 gold | Pup, Timber wolf, Dire wolf, Moonfang | Bites every swing; adds crit chance (up to +8%) |
 
 Hounds sit at your heel, sprint across to bite, and lope back. The hellhound has a burning mane, ember-cracked hide and a flaming tail.
+
+### The fairy (Scroll of the Fae)
+
+Any class can free a **fairy** companion from a Scroll of the Fae: found in treasure chests (2%), on rare foes (4%) and on the night road. Like the hounds, she fights only when she's the companion you bring along, and grows with the XP you earn: Wisp → Pixie → Faerie → Seraph (golden, with a halo). Her sting is lighter than a hound's bite (1 to 4), but every few full swings (every 4th as a wisp, every 2nd as a seraph) she weaves a charm, in turn:
+
+| Charm | Effect |
+|---|---|
+| Slumber dust | The foe sleeps through its next blow |
+| Wilting charm | Its blows land 40% softer for 2 turns |
+| Tangleroot | Half its blows miss for 2 turns |
+| Thornsting | Poison damage (3 + half your level) |
+| Lifebloom | Drains a little and heals you (4 + half your level) |
+
+She hovers at your shoulder, darts to the foe when she stings, and the charm's name flashes across the field.
 
 ### The Demon Hound (boss)
 
@@ -581,13 +631,14 @@ A planned subscription that is **looks only**: five supporter dyes (Midnight, Am
 
 **Log rations** (the Strike button) is The Calorie Card's Add food flow, using the same fatsecret-proxy:
 
+- **Nothing strikes until you've checked it.** Type what you ate and each food goes into *Ready to look up* (food typed in the camp box is looked up as the page opens). After the lookup every food shows in *Ready to strike* with the words you typed (and "Matched: …" for the product found), its portion, protein, carbs and fat, where the numbers came from (Label / database, Estimate, From before, Your numbers), and its energy. Tap one for the amount sheet: preset amounts (½×, 1×, 1½×, 2×, 3×, or grams for per-100 g packs), an exact amount in portions, g or oz (ml or fl oz for drinks) with a live total, fixing the name and numbers, what it counts as, and "Look up again". A count or weight in the name follows the amount ("4 sausages" → "2 sausages", "20g peanut butter" → "15g peanut butter"). The button at the bottom always says what it will do: *Look up 2 foods*, then *Spend 640 energy · Strike!*
 - **Type what you ate:** for example "2 crumpets, oat latte". Commas, semicolons and new lines separate foods. **Look up** resolves them a few at a time (`/food/resolve`), and each settles on screen as it arrives. A slow one shows the AI's quick estimate meanwhile (`/food/estimate`).
 - **Foods you've had before** come straight back with their numbers and need no lookup. A different amount is scaled from the last time: "10g peanut butter" after "40g peanut butter".
 - **Scan barcode** (`/food/barcode`) and **Photo of meal** (`/food/photo`) work as in The Calorie Card.
 - **Fixing a food:** tap it to change the amount (portions, g/oz or ml/fl oz) or its numbers. Corrected calories on a looked-up food are reported back (`/food/feedback`), the same as in The Calorie Card.
 - **Meals:** pick Breakfast, Lunch, Dinner or Snacks. You can save the foods you're logging as a meal, then log it again in one tap from Your meals. Add again offers the foods you log most at that meal.
-- **Log everything at once.** Add all you ate (a meal, or the whole day) and tap Log once. Each food is its own strike, and they play back to back as a **combo** without stopping: no windows in between. Spoils, the merchant and any quest or theft wait until the last strike. A foe that falls mid-combo is replaced by the next, and the rest of the strikes carry on into it.
-- **Combos play faster** the longer they are (1.3x for 2–3 foods, 1.6x for 4+), and **Skip ahead** plays the rest at 4x. The battle screen then sums it up: "Combo of 6 strikes: 412 damage · 2 critical · a foe defeated".
+- **Log everything at once.** Add all you ate (a meal, or the whole day) and tap Log once. Each food is its own strike, and they play back to back as a **combo**: your strike, the foe's turn, a beat, the next strike. When a foe falls mid-combo, it's handled like any victory: the spoils, the merchant, then now and then a random encounter (a quest or a chance). Then the combo carries on, into the quest foe if you took it, otherwise the next foe.
+- **Combos play a little faster** the longer they are (1.15x for 2–3 foods, 1.3x for 4+), and **Skip ahead** plays the rest at 4x. Leaving the battle screen mid-combo still logs (and strikes with) the rest. The battle screen then sums it up: "Combo of 6 strikes: 412 damage · 2 critical · a foe defeated".
 - The first 6 strikes a day are full strength, however you group them, so logging as you go and logging it all in the evening come to the same.
 - **Status effects:** foods are tagged ale, fast food or sweets from their name. You can change the tag on any food.
 - **Food country** is in Settings and defaults to the device's region. It sets the sizes, brands and labels used for lookups.
@@ -600,6 +651,20 @@ Copied from The Calorie Card: `food_resolver.dart`, `proxy_client.dart` and `por
 ```
 flutter run -d chrome --dart-define=PROXY_BASE_URL=http://localhost:3000
 ```
+
+## Stamina (calories) and the camp tour
+
+Calories are shown as your hero's **stamina**, and it fills up as you log: every food adds its calories and strikes your foe. Your daily allowance is **fully fuelled**; finishing the day between 90% and 105% of it is a balanced day. Under the hero card: "⚡1,096 stamina · 704 to fully fuelled" (tap it for the bar and an explanation). Over or under never stops a strike.
+
+Before the first meal is logged, a **spotlight tour** dims camp and lights up, in turn: the hero card, stamina, Log food, the inbox and today's food. It can be skipped, and replayed from **How it works** at the bottom of camp.
+
+## The adventure inbox
+
+Camp's inbox (like The Calorie Card's) shows one card at a time; swipe or use the arrows. In order: **today's daily gift** (always first while it's waiting), unclaimed spoils, the night road, a quest offer, an opportunity, your **current battle** (foe, HP, how hard it hits back), **Rest at the Inn** (once something's logged), the world boss, and calling a friend. Some can be put off with "Not now" until camp is next opened.
+
+## The night road
+
+Close a day that had food logged at the Inn, and the **night road** opens until you close the next one. Pick one of three moonlit paths (four places rotate: the Old Crypt, Whispering Woods, the Moonlit River, the Watchtower Ruins) and the hero finds something small: coins (most often, about a third of a common foe's gold), a little XP, sometimes a potion, now and then a scroll of enchanting, rarely a ring. It takes a few seconds, never costs anything, and gives every class the same.
 
 ## Connecting Firebase later
 

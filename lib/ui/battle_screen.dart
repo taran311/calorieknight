@@ -48,6 +48,9 @@ class _BattleScreenState extends State<BattleScreen> {
   @override
   void dispose() {
     c.removeListener(_watch);
+    // Left mid-combo: the remaining foods are still logged (and strike), just without the show.
+    final game = c;
+    Future<void>.microtask(game.finishComboQuietly);
     super.dispose();
   }
 
@@ -69,11 +72,17 @@ class _BattleScreenState extends State<BattleScreen> {
     // Spoils first (equip or sell), then the merchant.
     await resolvePendingLoot(context, c);
     if (mounted) await showMerchantWindow(context, c, victory: last.text.isEmpty ? null : last.text);
-    // Someone on the road with a quest: one tap and its foe walks in.
-    if (mounted && c.state.questOffer != null && await showQuestOffer(context, c)) c.acceptQuest();
-    // Or a chance to try your luck; a botched theft can start a fight right here.
-    if (mounted && c.state.opportunity != null && await showOpportunity(context, c)) c.ambushArrives();
+    // Then, now and then, a random encounter: someone with a quest (one tap and its foe walks in)...
+    var walkedIn = false;
+    if (mounted && c.state.questOffer != null && await showQuestOffer(context, c)) walkedIn = c.acceptQuest();
+    // ...or a chance to try your luck; a botched theft can start a fight right here.
+    if (mounted && !walkedIn && c.state.opportunity != null && await showOpportunity(context, c)) {
+      walkedIn = c.state.rare != null;
+      c.ambushArrives();
+    }
     _merchantOpen = false;
+    // A combo paused at this victory carries on now (onto the quest foe, once it has walked in).
+    if (!walkedIn) c.resumeCombo();
   }
 
   Future<void> _logAnother() async {
@@ -123,7 +132,7 @@ class _BattleScreenState extends State<BattleScreen> {
     };
     final left = fullSwingsPerDay - strikes;
     return '${r.food.name}: $hit$guard · ${left > 0 ? '$left full ${left == 1 ? 'swing' : 'swings'} left' : 'full swings used'}'
-        ' · ${fmt(totals(s.logs).kcal)} / ${fmt(s.settings.allowance)} kcal';
+        ' · ${fmt(totals(s.logs).kcal)} / ${fmt(s.settings.allowance)} stamina';
   }
 
   /// "Combo of 5 strikes: 412 damage · 2 critical · 1 miss · Goblin Scout defeated"
@@ -254,7 +263,7 @@ class _BattleScreenState extends State<BattleScreen> {
                                         Text(
                                           n >= fullSwingsPerDay
                                               ? 'Full-strength swings used for today. Rest at the Inn to land the finishing blow.'
-                                              : '${fullSwingsPerDay - n} full-strength swings left today · ${fmt(totals(s.logs).kcal)} / ${fmt(s.settings.allowance)} kcal',
+                                              : '${fullSwingsPerDay - n} full-strength swings left today · ${fmt(totals(s.logs).kcal)} / ${fmt(s.settings.allowance)} stamina',
                                           style: Txt.body(size: 14, color: Palette.inkSoft),
                                         ),
                                     ],

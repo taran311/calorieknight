@@ -299,10 +299,10 @@ String classSpecial(HeroClass c) => switch (c) {
 };
 
 /// Everything gear can do. Per-swing effects only apply to full-strength swings.
-enum Stat { damage, poison, burn, frost, smite, bleed, crit, lifesteal, guard, vigour, regen, thorns, fortune, wisdom, dragonkin, dodge, parry, block, leech }
+enum Stat { damage, poison, burn, frost, smite, bleed, crit, lifesteal, guard, vigour, regen, thorns, fortune, wisdom, dragonkin, dodge, parry, block, leech, wyrmbane }
 
 extension StatInfo on Stat {
-  bool get percent => const {Stat.crit, Stat.guard, Stat.fortune, Stat.wisdom, Stat.dodge, Stat.parry, Stat.block, Stat.leech}.contains(this);
+  bool get percent => const {Stat.crit, Stat.guard, Stat.fortune, Stat.wisdom, Stat.dodge, Stat.parry, Stat.block, Stat.leech, Stat.wyrmbane}.contains(this);
 
   String describe(int v) => switch (this) {
     Stat.damage => '+$v damage per swing',
@@ -324,6 +324,7 @@ extension StatInfo on Stat {
     Stat.parry => '+$v% chance to parry the foe\'s counter',
     Stat.block => '+$v% chance to block the foe\'s counter',
     Stat.leech => 'Heal $v% of your damage (bloodleech)',
+    Stat.wyrmbane => '+$v% damage to dragons',
   };
 }
 
@@ -394,6 +395,7 @@ class GearItem {
         Stat.dragonkin => v * 2.0,
         Stat.dodge || Stat.parry || Stat.block => v * 1.2,
         Stat.leech => v * 2.5,
+        Stat.wyrmbane => v * .6,
       };
     });
     // A special attack (quest and rune weapons) fires every few swings: worth a lot.
@@ -743,6 +745,7 @@ double _base(Stat s, int level) {
     Stat.dragonkin => 1 + level * .15,
     Stat.dodge || Stat.parry || Stat.block => 4 + level * .2,
     Stat.leech => 6 + level * .15,
+    Stat.wyrmbane => 5.0,
   };
   return v.toDouble();
 }
@@ -859,6 +862,107 @@ class LootTable {
       lore: lore,
       value: _value(level, Rarity.legendary, slot) * 2,
       stats: {for (final e in stats.entries) e.key: _roll(e.key, level, e.value, _r)},
+    );
+  }
+
+  /// A wyrmscale piece from a slain dragon of [tier]: a weapon, helm, armour, gloves or boots in
+  /// the dragon's colour, each striking dragons harder. Higher tiers are rarer; now and then a
+  /// piece comes enchanted, and enchanted or legendary pieces glow.
+  GearItem wyrmDrop(HeroClass heroClass, int level, WyrmTier tier, {GearSlot? only}) {
+    const slots = [GearSlot.weapon, GearSlot.helm, GearSlot.armour, GearSlot.gloves, GearSlot.boots];
+    final slot = only ?? slots[_r.nextInt(slots.length)];
+    final t = tier.tier;
+    final rarity = switch (t) {
+      1 => Rarity.rare,
+      2 => _r.nextDouble() < .6 ? Rarity.rare : Rarity.epic,
+      3 => Rarity.epic,
+      4 => _r.nextDouble() < .7 ? Rarity.epic : Rarity.legendary,
+      _ => Rarity.legendary,
+    };
+    final bane = switch (slot) {
+      GearSlot.weapon => 4 + 2 * t,
+      _ => 2 + t,
+    };
+    final (name, art, stats, lore) = switch (slot) {
+      GearSlot.weapon => switch (heroClass) {
+        HeroClass.knight => ('${tier.name} Wyrmbane greatsword', 'wyrmblade', <Stat, double>{Stat.damage: 1.3 + .08 * t, Stat.crit: .8}, 'Its edge is a row of dragon\'s teeth, set in steel.'),
+        HeroClass.mage => ('${tier.name} wyrmspine staff', 'dragonstaff', <Stat, double>{Stat.damage: 1.2 + .08 * t, Stat.burn: 1.2}, 'A dragon\'s spine, still warm along its length.'),
+        HeroClass.ranger => ('${tier.name} wyrmhorn bow', 'longbow', <Stat, double>{Stat.damage: 1.25 + .08 * t, Stat.crit: 1.0}, 'Bent from a dragon\'s horn; it never loses its pull.'),
+      },
+      GearSlot.helm => (
+        heroClass == HeroClass.knight ? '${tier.name} wyrmhelm' : '${tier.name} wyrmhorn circlet',
+        heroClass == HeroClass.knight ? 'wyrmhelm' : 'wyrmcirclet',
+        <Stat, double>{Stat.guard: .9, Stat.vigour: .8},
+        'Two horns swept back, like the dragon it was taken from.',
+      ),
+      GearSlot.gloves => (
+        '${tier.name} wyrmscale ${heroClass == HeroClass.knight ? 'gauntlets' : (heroClass == HeroClass.ranger ? 'bracers' : 'gloves')}',
+        switch (heroClass) {
+          HeroClass.knight => 'gauntlets',
+          HeroClass.mage => 'spellgloves',
+          HeroClass.ranger => 'bracers',
+        },
+        <Stat, double>{Stat.damage: .6, Stat.crit: .6},
+        'Scale over scale, each one a shield the size of a coin.',
+      ),
+      GearSlot.boots => (
+        '${tier.name} wyrmscale ${heroClass == HeroClass.knight ? 'sabatons' : 'boots'}',
+        heroClass == HeroClass.knight ? 'sabatons' : 'boots',
+        <Stat, double>{Stat.vigour: .8, Stat.dodge: .7},
+        'They leave no prints, only scorch marks.',
+      ),
+      _ => (wyrmArmourName(heroClass, tier), wyrmArmourId(heroClass, t), <Stat, double>{}, 'Damage taken −${((.30 + .04 * (t - 1)) * 100).round()}%, +${3 + 2 * t}% damage to dragons.'),
+    };
+    final enchant = slot != GearSlot.armour && _r.nextDouble() < .25 ? rollEnchant(slot == GearSlot.weapon ? EnchantSlot.weapon : EnchantSlot.armour, level, _r) : null;
+    return GearItem(
+      id: _id(),
+      name: name,
+      slot: slot,
+      art: art,
+      rarity: rarity,
+      level: level,
+      heroClass: heroClass,
+      lore: lore,
+      tint: tier.argb,
+      enchant: enchant,
+      gearSet: wyrmSet,
+      value: _value(level, rarity, slot) * 2,
+      stats: {
+        for (final e in stats.entries) e.key: _roll(e.key, level, e.value * (rarity == Rarity.legendary ? 1.25 : (rarity == Rarity.epic ? 1.1 : 1)), _r),
+        if (slot != GearSlot.armour) Stat.wyrmbane: bane,
+      },
+    );
+  }
+
+  /// Dragonbone jewellery of [tier]: a ring (crit and damage) or a fang amulet (vigour and guard),
+  /// carved from a dragon's bones with a gem of its colour, and striking dragons harder.
+  GearItem dragonboneJewel(int level, WyrmTier tier, {required bool ring, Rarity? rarity}) {
+    final t = tier.tier;
+    final r = rarity ??
+        switch (t) {
+          1 => Rarity.rare,
+          2 => _r.nextDouble() < .6 ? Rarity.rare : Rarity.epic,
+          3 => Rarity.epic,
+          4 => _r.nextDouble() < .7 ? Rarity.epic : Rarity.legendary,
+          _ => Rarity.legendary,
+        };
+    final boost = r == Rarity.legendary ? 1.25 : (r == Rarity.epic ? 1.1 : 1.0);
+    final stats = ring ? <Stat, double>{Stat.crit: .8, Stat.damage: .5} : <Stat, double>{Stat.vigour: 1.0, Stat.guard: .6};
+    return GearItem(
+      id: _id(),
+      name: ring ? '${tier.name} dragonbone ring' : '${tier.name} fang amulet',
+      slot: ring ? GearSlot.ring : GearSlot.trinket,
+      art: ring ? 'dragonbonering' : 'fangamulet',
+      rarity: r,
+      level: level,
+      lore: ring ? 'Carved from a dragon\'s knucklebone; the gem is the colour of its scales.' : 'A dragon\'s fang on a cord of its own sinew.',
+      tint: tier.argb,
+      gearSet: wyrmSet,
+      value: _value(level, r, ring ? GearSlot.ring : GearSlot.trinket) * 2,
+      stats: {
+        for (final e in stats.entries) e.key: _roll(e.key, level, e.value * boost, _r),
+        Stat.wyrmbane: 2 + t,
+      },
     );
   }
 
@@ -1382,3 +1486,8 @@ GearItem starterWeapon(HeroClass c) {
     stats: const {Stat.damage: 1},
   );
 }
+
+/// Marks wyrmscale pieces (not a set with a bonus: each piece strikes dragons harder on its own).
+const wyrmSet = 'wyrmscale';
+
+String wyrmArmourName(HeroClass c, WyrmTier w) => armourTierById(wyrmArmourId(c, w.tier)).name;

@@ -14,6 +14,7 @@ import '../art/beasts.dart';
 import '../art/body.dart';
 import '../art/creatures.dart';
 import '../art/hounds.dart';
+import '../art/fairy.dart';
 import '../art/kraken.dart';
 import '../art/looks.dart';
 import '../art/paint_kit.dart';
@@ -648,7 +649,31 @@ class _BattleStageState extends State<BattleStage> with SingleTickerProviderStat
       });
     }
     final pet = r.pet;
-    if (pet != null) {
+    if (pet != null && pet.$1 == Pet.fairy) {
+      // The fairy darts to the foe, stings, and flits back; now and then it weaves a charm.
+      _at(d0 + swingHitMs + hitOffset + 60, () => _tween('pounce', 1, 700, ease: (p) => p));
+      _at(d0 + swingHitMs + hitOffset + 380, () {
+        _spark('fae', _foeChest + const Offset(-10, -30), 14, speed: 2.5, life: 700, radius: 3, lift: 1.2, gravity: -.01);
+        _mark('${r.damage.chip}', _holy, _foeChest + const Offset(26, 32));
+        c.revealDamage(r.damage.chip);
+      });
+      final charm = r.charm;
+      if (charm != null) {
+        _at(d0 + swingHitMs + hitOffset + 520, () {
+          _banner = ('${charm.label}!', Color(charm.argb), now);
+          _spark(charm == FairyCharm.venom ? 'venom' : (charm == FairyCharm.leech ? 'blood' : 'fae'), _foeChest, 26, speed: 2.2, life: 1000, radius: 3.5, lift: 1.5, gravity: -.02);
+          if (r.charmHit > 0) {
+            _mark('${r.charmHit}', charm == FairyCharm.venom ? _green : _red, _foeChest + const Offset(-24, -50));
+            c.revealDamage(r.charmHit);
+          }
+          if (r.charmHeal > 0) {
+            _mark('+${r.charmHeal}', _green, const Offset(_knightX + 10, _groundY - 250));
+            _spark('mend', const Offset(_knightX, _groundY - 140), 12, lift: 2.5, speed: 2.5, life: 900, gravity: -.02);
+          }
+        });
+      }
+      _at(d0 + swingHitMs + hitOffset + 780, () => fx['pounce'] = 0);
+    } else if (pet != null) {
       // The hound sprints across, bites, and lopes back.
       _at(d0 + swingHitMs + hitOffset + 60, () => _tween('pounce', 1, 760, ease: (p) => p));
       _at(d0 + swingHitMs + hitOffset + 440, () {
@@ -960,7 +985,14 @@ class _ScenePainter extends CustomPainter {
     }
 
     final ds = dragonStage(k), pet = petStage(k);
-    if (pet != null) {
+    if (pet != null && pet.$1 == Pet.fairy) {
+      // A fairy hovering at your shoulder; it darts to the foe when it strikes.
+      final p = fx['pounce']!, stage = petStages[pet.$1]!.indexOf(pet.$2);
+      final home = Offset(_knightX - 60 + (still ? 0 : math.sin(t / 700) * 10), _groundY - 210 + (still ? 0 : math.sin(t / 260) * 6));
+      final away = s._foeChest + const Offset(-40, -40);
+      final k2 = math.sin(p * math.pi);
+      drawFairy(canvas, Offset.lerp(home, away, k2)!, stage, t, still: still);
+    } else if (pet != null) {
       // A hound companion at your heel; it dashes to the foe when it bites.
       final p = fx['pounce']!, stage = petStages[pet.$1]!.indexOf(pet.$2);
       final x = 120 + (_foeX - 230) * math.sin(p * math.pi);
@@ -1310,6 +1342,7 @@ class _ScenePainter extends CustomPainter {
             'rime' => const Color(0xFFBFEFFF),
             'holy' => const Color(0xFFFFF0A0),
             'curse' => const Color(0xFFC89AFF),
+            'fae' => const Color(0xFFF4C8FF),
             'bone' => const Color(0xFFF2EAD0),
             'blood' => const Color(0xFFB0302A),
             'smoke' => const Color(0xFF8A8680),

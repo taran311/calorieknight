@@ -10,6 +10,7 @@ import 'classes.dart';
 import 'loot.dart';
 import 'models.dart';
 import 'mounts.dart';
+import 'night.dart';
 import 'heists.dart';
 import 'quests.dart';
 import 'spells.dart';
@@ -122,6 +123,10 @@ class SwingResult {
   /// HP mended by Healing Light (or a unicorn's charge) this swing.
   int mended = 0;
 
+  /// A fairy companion's charm on this swing, and what it did (damage to the foe, HP healed).
+  FairyCharm? charm;
+  int charmHit = 0, charmHeal = 0;
+
   /// A counter Mirror Ward hurled back at the foe.
   int reflected = 0;
 
@@ -220,7 +225,7 @@ class GameEngine {
         : loot.roll(k.heroClass, k.level, wielding: k.loadouts[k.heroClass]!.weapon, odds: rare.quest?.odds ?? rareOdds(rare), element: rare.quest == QuestGiver.seer || rare.quest == QuestGiver.king ? null : auraStat(rare.aura));
     state.pendingLoot.add(drop);
     var egg = false;
-    GearItem? prize, orkPrize;
+    GearItem? prize, orkPrize, wyrm;
     final boost = rare == null ? 1.0 : 1.5;
     if (f.ork && !_hasPrize(k, _orkArt(k.heroClass)) && _rng.nextDouble() < (f.boss ? orkGearChanceBoss : orkGearChance) * boost) {
       orkPrize = loot.orkDrop(k.heroClass, k.level);
@@ -282,6 +287,14 @@ class GameEngine {
         prize = loot.dragonDrop(k.heroClass, k.level);
         state.pendingLoot.add(prize);
       }
+      // Wyrmscale: a piece in this dragon's colour (its tier).
+      final tier = wyrmTierFor(f.look);
+      if (tier != null && _rng.nextDouble() < (f.boss ? wyrmChanceBoss : (rare != null ? wyrmChanceRare : wyrmChance))) {
+        // Now and then it's jewellery carved from its bones instead.
+        final jewel = _rng.nextInt(7);
+        wyrm = jewel >= 5 ? loot.dragonboneJewel(k.level, tier, ring: jewel == 5) : loot.wyrmDrop(k.heroClass, k.level, tier);
+        state.pendingLoot.add(wyrm);
+      }
     }
     // Knights now and then find a chainmail or platebody variant.
     GearItem? suit;
@@ -294,6 +307,10 @@ class GameEngine {
     // A scroll of enchanting now and then (a free rune at the enchanter).
     final scroll = _rng.nextDouble() < (f.boss || rare != null ? scrollChanceBoss : scrollChance);
     if (scroll) k.scrolls++;
+    // Rare foes sometimes carry a Scroll of the Fae.
+    if (rare != null && rare.quest == null && _rng.nextDouble() < faeScrollRare && _freeFairy()) {
+      _note('Among its things: a Scroll of the Fae. A fairy steps out of its light and joins you! Bring it along under Kit & spells.', EntryKind.gold);
+    }
     // Bosses and rare foes sometimes leave a cape with a class ability.
     GearItem? cape;
     if ((f.boss || rare != null) && _rng.nextDouble() < capeChance) {
@@ -378,13 +395,14 @@ class GameEngine {
     if (egg) _note('Among the bones lies a dragon egg. It\'s yours now.', EntryKind.gold);
     if (wonMount != null) _note('The ${wonMount.name.toLowerCase()} bows its head to you. It\'s yours to ride: ${wonMount.desc.split('. ').last}.', EntryKind.gold);
     if (prize != null) _note('The dragon leaves behind ${prize.name}!', EntryKind.gold);
+    if (wyrm != null) _note('From its scales and bones: ${wyrm.name}!', EntryKind.gold);
     if (orkPrize != null) _note('The ork drops its ${orkPrize.name.toLowerCase()}!', EntryKind.gold);
     if (scroll) _note('Tucked in its belt: a scroll of enchanting. Read it at the enchanter for a free rune.', EntryKind.gold);
     if (suit != null) _note('Among the spoils: a suit of ${suit.name.toLowerCase()}.', EntryKind.gold);
     if (cape != null) _note('A cape flutters down: ${cape.name}. ${capeByAbility(cape.special)!.ability}.', EntryKind.gold);
     if (bonePrize != null) _note('Among the bones: ${bonePrize.name.toLowerCase()}!', EntryKind.gold);
     if (collar != null) _note('${f.name} leaves something behind: ${collar.name}!', EntryKind.gold);
-    if (pup) _note('A hellhound pup crawls out of the embers and follows you. Make it your companion on the Hero page.', EntryKind.gold);
+    if (pup) _note('A hellhound pup crawls out of the embers and follows you. Make it your companion under Kit & spells at camp.', EntryKind.gold);
     if (rune != null) _note('Among the Warden\'s bones, runes glow: a ${rune.name}!', EntryKind.gold);
     if (entPrize != null) _note('The ent leaves you a gift: ${entPrize.name}!', EntryKind.gold);
     if (acorn != null) _note('An acorn falls from the old ent\'s crown: the ${acorn.name}!', EntryKind.gold);
@@ -610,6 +628,9 @@ class GameEngine {
     if (potion) k.potions++;
     state.pendingLoot.addAll(items);
     state.chestsOpened++;
+    if (_rng.nextDouble() < faeScrollChest && _freeFairy()) {
+      _note('At the bottom of the chest: a Scroll of the Fae. A fairy steps out of its light and joins you! Bring it along under Kit & spells.', EntryKind.gold);
+    }
     final find = ChestFind(tier, coins, items, potion: potion, ammo: ammo == null ? null : '$ammoBundle ${ammo.label(missileFor(k.loadouts[HeroClass.ranger]!.weapon?.art)).toLowerCase()}');
     _note('You open a ${tier.label.toLowerCase()}: ${find.summary}.', EntryKind.gold);
     return find;
@@ -841,6 +862,34 @@ class GameEngine {
       r.pet = pet;
       state.foeHp -= d.chip;
       _note('Your ${pet.$2.name.toLowerCase()} bites for ${d.chip}.', EntryKind.damage);
+      // A fairy weaves a charm every few full swings, in turn.
+      final every = pet.$2.charm;
+      if (every > 0 && idx < fullSwingsPerDay) {
+        state.fairyCharge++;
+        if (state.fairyCharge >= every) {
+          state.fairyCharge = 0;
+          final charm = FairyCharm.values[state.fairyNext % FairyCharm.values.length];
+          state.fairyNext++;
+          r.charm = charm;
+          switch (charm) {
+            case FairyCharm.slumber:
+              state.foeAsleep = math.max(state.foeAsleep, 1);
+            case FairyCharm.enfeeble:
+              state.foeWeakened = math.max(state.foeWeakened, 2);
+            case FairyCharm.slow:
+              state.foeSlowed = math.max(state.foeSlowed, 2);
+            case FairyCharm.venom:
+              r.charmHit = 3 + k.level ~/ 2;
+            case FairyCharm.leech:
+              r.charmHit = 2 + k.level ~/ 3;
+              final before = k.hp;
+              k.hp = math.min(maxHp(k), k.hp + 4 + k.level ~/ 2);
+              r.charmHeal = k.hp - before;
+          }
+          state.foeHp -= r.charmHit;
+          _note('Your ${pet.$2.name.toLowerCase()} casts ${charm.label}: ${charm.effect}${r.charmHit > 0 ? ' (${r.charmHit})' : ''}${r.charmHeal > 0 ? ', +${r.charmHeal} HP' : ''}.', EntryKind.good);
+        }
+      }
     } else if (d.chip > 0 && ds != null) {
       r.dragon = ds;
       state.foeHp -= d.chip;
@@ -944,6 +993,14 @@ class GameEngine {
         _note('$foeName swings back. $how${thorns > 0 ? ' Your thorns bite for $thorns.' : ''}${r.reflected > 0 ? ' Your mirror hurls ${r.reflected} back!' : ''}', hurt > 0 ? EntryKind.damage : EntryKind.plain);
         if (thorns > 0 || r.reflected > 0) r.kill = _checkKill();
       }
+    } else if (r.kill == null && idx >= fullSwingsPerDay && !noDamage(state)) {
+      // Past the day's full swings the foe still takes its turn, so the fight reads as a fight, but
+      // these light exchanges never cost HP: logging every bite is never punished.
+      final foeName = encounterType(state.foe, state.rare).name, dodged = _rng.nextBool();
+      r
+        ..counter = 0
+        ..guard = dodged ? Guard.dodge : Guard.block;
+      _note(dodged ? '$foeName swings back. You sidestep it.' : '$foeName swings back. You turn it aside.');
     }
     // Hexes wear off one full swing at a time.
     if (idx < fullSwingsPerDay) {
@@ -1056,7 +1113,7 @@ class GameEngine {
     if (mount != null) return mount.dropOnly ? 1 << 30 : (mount.price * (state.wantedDays > 0 ? 1.5 : 1)).round();
     final tier = armourTiers.where((a) => a.id == id).firstOrNull;
     // Potions get stronger and dearer as you level.
-    final base = id == 'potion' ? 25 + 2 * lvl : id == 'boots' ? 40 + 6 * lvl : id == 'ringbox' ? 60 + 10 * lvl : id.startsWith('dye:') ? prices['dye']! : (tier?.price ?? prices[id] ?? 1 << 30);
+    final base = id == 'potion' ? 25 + 2 * lvl : id == 'boots' ? 40 + 6 * lvl : id == 'ringbox' ? 60 + 10 * lvl : id == 'bonecarver' ? 90 + 12 * lvl : id.startsWith('dye:') ? prices['dye']! : (tier?.price ?? prices[id] ?? 1 << 30);
     return state.wantedDays > 0 && base < 1 << 29 ? (base * 1.5).round() : base;
   }
 
@@ -1161,6 +1218,13 @@ class GameEngine {
         // A plain, sturdy pair from the cobbler (better ones come from battle).
         k.loadout.boots = loot.roll(k.heroClass, k.level, odds: const [100, 0, 0, 0, 0], only: GearSlot.boots);
         what = k.loadout.boots!.name.toLowerCase();
+      case 'bonecarver':
+        // The bone carver's pouch: a dragonbone ring or fang amulet, from the dragons of the lands
+        // you've reached (the Obsidian and Elder pieces only ever come from the dragons themselves).
+        final tier = wyrmTiers[realmOf(state.foe).clamp(1, 3) - 1];
+        final jewel = loot.dragonboneJewel(k.level, tier, ring: _rng.nextBool(), rarity: _rng.nextDouble() < .8 ? Rarity.rare : Rarity.epic);
+        state.pendingLoot.add(jewel);
+        what = 'a bone carver\'s pouch. Inside: ${jewel.name} (${jewel.rarity.label})';
       case 'ringbox':
         // A jeweller's box: you don't know which ring until it's open.
         final ring = loot.roll(k.heroClass, k.level, odds: const [0, 55, 35, 9, 1], only: GearSlot.ring);
@@ -1265,6 +1329,61 @@ class GameEngine {
         _note('Daily gift: a ${c.tier.name} chest! ${c.coins} gold${c.items.isEmpty ? '' : ' and ${c.items.map((g) => g.name).join(', ')}'}.', EntryKind.gold);
         return LoginClaim(slot, gift, chest: c);
     }
+  }
+
+  /// A Scroll of the Fae frees a fairy companion (once). False if you already have one.
+  bool _freeFairy() {
+    final k = state.knight;
+    if (k.pets.containsKey(Pet.fairy.name)) return false;
+    k.pets[Pet.fairy.name] = 0;
+    return true;
+  }
+
+  // ---------------- the night road ----------------
+
+  /// Tonight's road is open: a day with food logged was closed, and it hasn't been walked yet.
+  bool get nightReady => state.nightDay == state.day && state.nightDoneDay != state.day;
+
+  List<NightPath> get nightChoices => pathsFor(state.day);
+
+  /// Walks [path] (one of [nightChoices]). Null if the road isn't open.
+  NightResult? walkNight(NightPath path) {
+    if (!nightReady) return null;
+    final k = state.knight;
+    state.nightDoneDay = state.day;
+    final find = rollFind(_rng);
+    final story = path.finds.firstWhere((f) => f.$2 == find).$1;
+    NightResult r;
+    switch (find) {
+      case NightFind.gold || NightFind.goldMore:
+        final g = nightGold(k.level, more: find == NightFind.goldMore);
+        k.coins += g;
+        r = NightResult(path, story, find, gold: g);
+      case NightFind.xp:
+        final xp = nightXp(k.level), ups = _grantXp(xp);
+        r = NightResult(path, story, find, xp: xp);
+        if (ups > 0) _note('You reached level ${k.level}.', EntryKind.gold);
+      case NightFind.potion:
+        k.potions++;
+        r = NightResult(path, story, find);
+      case NightFind.scroll:
+        k.scrolls++;
+        r = NightResult(path, story, find);
+      case NightFind.fae:
+        if (_freeFairy()) {
+          r = NightResult(path, story, find);
+        } else {
+          final g = nightGold(k.level, more: true);
+          k.coins += g;
+          r = NightResult(path, 'A faint glow drifts away between the trees. Where it hovered, someone dropped a purse.', NightFind.goldMore, gold: g);
+        }
+      case NightFind.ring:
+        final ring = loot.roll(k.heroClass, k.level, odds: const [0, 60, 32, 8, 0], only: GearSlot.ring);
+        state.pendingLoot.add(ring);
+        r = NightResult(path, story, find, item: ring.name);
+    }
+    _note('The night road (${path.name}): ${r.reward}.', EntryKind.gold);
+    return r;
   }
 
   // ---------------- a friend's aid ----------------
@@ -1423,7 +1542,10 @@ class GameEngine {
     state.summonTurns = 0;
     state.foeFrozen = false;
     if (state.wantedDays > 0) state.wantedDays--;
+    final logged = state.logs.isNotEmpty;
     state.day++;
+    // A day logged and closed opens tonight's road.
+    if (logged) state.nightDay = state.day;
     state.logs = [];
     state.strikes = 0;
     state.corrections = 0;

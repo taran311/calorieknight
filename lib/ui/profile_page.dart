@@ -8,7 +8,9 @@ import '../game/controller.dart';
 import '../game/engine.dart' show balancedStreak, balancedThisWeek;
 import '../services/auth.dart';
 import '../services/friends.dart';
+import 'daily_window.dart' show showDailyGift, showSupporterWindow;
 import 'journal_panel.dart' show fmt;
+import 'plan_setup.dart';
 import 'theme.dart';
 import 'windows.dart' show showSettingsWindow;
 
@@ -88,10 +90,28 @@ class ProfilePage extends StatelessWidget {
               if (s.referredBy == null) ...[const SizedBox(height: 10), _JoinInvite(controller: controller)],
               const SizedBox(height: 10),
               StoneButton(
+                title: 'Your stamina: ${fmt(s.settings.allowance)} a day',
+                caption: 'Answer the questions again to recalculate it',
+                onPressed: () => openPlanSetup(context, controller, email: email),
+              ),
+              if (controller.cardLink.available) ...[
+                const SizedBox(height: 8),
+                StoneButton(title: 'Pull my plan from The Calorie Card', caption: 'Same account: use its calories and macros', compact: true, onPressed: () => pullFromCalorieCard(context, controller)),
+              ],
+              const SizedBox(height: 8),
+              StoneButton(
                 title: 'Settings',
                 caption: 'Name, allowance, macros, play modes, new adventure',
                 onPressed: () => showSettingsWindow(context, controller, email: email, onSignOut: auth.signOut),
               ),
+              const SizedBox(height: 8),
+              StoneButton(
+                title: controller.state.knight.supporter ? 'Supporter\'s Pass · thank you!' : 'Supporter\'s Pass',
+                caption: 'Cosmetic only: supporter dyes and a golden crest',
+                onPressed: () => showSupporterWindow(context, controller),
+              ),
+              const SizedBox(height: 8),
+              StoneButton(title: 'Daily gift calendar', compact: true, onPressed: () => showDailyGift(context, controller)),
               const SizedBox(height: 8),
               StoneButton(title: 'Sign out', compact: true, onPressed: controller.locked ? null : auth.signOut),
               const SizedBox(height: 12),

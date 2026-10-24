@@ -188,7 +188,7 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
       ),
       if (widget.auth.isReal)
-        Text('Your Calorie Card account works here too.', textAlign: TextAlign.center, style: Txt.body(size: 13.5, color: Palette.inkSoft))
+        Text('One account for CalorieKnight and The Calorie Card: sign in with either, and your daily plan is shared.', textAlign: TextAlign.center, style: Txt.body(size: 13.5, color: Palette.inkSoft))
       else ...[
       const SizedBox(height: 6),
       Container(
@@ -324,6 +324,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       const SizedBox(height: 12),
       StoneButton(title: _working ? 'Creating account…' : 'Create account', tone: ButtonTone.blood, onPressed: _working ? null : _submit),
+      if (widget.auth.isReal)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('This account works in The Calorie Card too: same email, same password.', textAlign: TextAlign.center, style: Txt.body(size: 13, color: Palette.inkSoft)),
+        ),
       const SizedBox(height: 8),
       TextButton(
         onPressed: _working ? null : () => Navigator.of(context).pop(),

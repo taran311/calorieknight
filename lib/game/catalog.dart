@@ -581,4 +581,10 @@ const dragonStages = <DragonStage>[
 ];
 
 /// Shop prices for non-armour items.
-const prices = <String, int>{'potion': 25, 'poison': 40, 'helm': 60, 'gauntlets': 80, 'shield': 100, 'egg': 200, 'dye': 30, 'wolf': wolfPrice};
+/// "a" or "an" before [word], by its first letter ("an ancient", "a cursed").
+String aOrAn(String word) => RegExp(r'^[aeiouAEIOU]').hasMatch(word) ? 'an' : 'a';
+
+/// [word] with "a" or "an" in front: "an epic chest".
+String withArticle(String word) => '${aOrAn(word)} $word';
+
+const prices = <String, int>{'potion': 25, 'poison': 40, 'helm': 60, 'gauntlets': 80, 'gloves': 80, 'shield': 100, 'egg': 200, 'dye': 30, 'wolf': wolfPrice};

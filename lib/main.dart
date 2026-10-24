@@ -11,6 +11,7 @@ import 'services/calorie_card_link.dart';
 import 'services/firebase_auth_service.dart';
 import 'services/food_book.dart';
 import 'services/food_country.dart';
+import 'services/cloud_save.dart';
 import 'services/friends.dart';
 import 'services/proxy_client.dart';
 import 'services/storage.dart';
@@ -68,14 +69,31 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   GameController? _game;
   FriendsService? _friends;
   WorldBossService? _world;
   String? _gameFor;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Hidden: send the cloud save now. Back in view: pick up play from another device.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed) {
+      unawaited(_game?.syncFromCloud());
+    } else if (s == AppLifecycleState.hidden || s == AppLifecycleState.paused || s == AppLifecycleState.inactive) {
+      unawaited(_game?.flushSave());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _game?.dispose();
     _friends?.dispose();
     super.dispose();
@@ -103,8 +121,9 @@ class _AuthGateState extends State<AuthGate> {
       final world = widget.auth.isReal ? LiveWorldBossService(uid: a.id, fallback: practice) : practice;
       _world = world;
       _game = GameController(
-        storage: GameStorage(accountId: a.id),
-        foodBook: FoodBook(accountId: a.id),
+        // Real accounts also keep their save in the cloud, so the hero is the same on every device.
+        storage: GameStorage(accountId: a.id, cloud: widget.auth.isReal ? FirestoreCloudSave(a.id) : null),
+        foodBook: FoodBook(accountId: a.id, cloud: widget.auth.isReal ? FirestoreCloudSave(a.id, collection: 'ck_foodbook') : null),
         friends: friends,
         world: world,
         // One sign-in for both apps: the stamina allowance can come from (and go to) The Calorie Card.

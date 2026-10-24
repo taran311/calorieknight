@@ -124,7 +124,7 @@ Quest makeQuest(int next, math.Random rng) {
       return Quest(
         giver,
         'A Seer\'s Vision',
-        '"I have seen it in the smoke: a ${aura.label.toLowerCase()} ${f.name.toLowerCase()} waits on this road, and great fortune lies beneath it. Go now, before the vision fades."',
+        '"I have seen it in the smoke: ${withArticle(aura.label.toLowerCase())} ${f.name.toLowerCase()} waits on this road, and great fortune lies beneath it. Go now, before the vision fades."',
         Rare(base, aura, name: 'The Foretold ${f.name}', quest: giver),
       );
     case QuestGiver.mage:

@@ -66,6 +66,10 @@ ThemeData buildTheme() {
       filled: true,
       fillColor: const Color(0xFFF3EAD2),
       labelStyle: Txt.body(size: 14, color: Palette.inkSoft),
+      // Readable examples and icons on the cream fill (the defaults were nearly invisible).
+      hintStyle: Txt.body(size: 14, color: Palette.inkSoft.withValues(alpha: .7), italic: true),
+      prefixIconColor: Palette.inkSoft,
+      suffixIconColor: Palette.ink,
       floatingLabelStyle: Txt.body(size: 14, color: Palette.inkSoft),
       border: const OutlineInputBorder(
         borderSide: BorderSide(color: Palette.parchLine),

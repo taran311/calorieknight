@@ -118,6 +118,7 @@ class GameController extends ChangeNotifier {
   Future<void> load() async {
     final saved = await storage.load();
     if (saved != null) engine = GameEngine(saved);
+    checkCalendar();
     FoodCountry.chosen = state.settings.foodCountry;
     unawaited(foodBook.load());
     _syncShown();
@@ -135,6 +136,49 @@ class GameController extends ChangeNotifier {
   }
 
   void _save() => unawaited(storage.save(state));
+
+  /// When the app comes back into view: if this hero was played on another device since, pick up
+  /// that save. Skipped mid-fight.
+  Future<void> syncFromCloud() async {
+    if (!loaded || busy || locked) return;
+    final newer = await storage.newerInCloud();
+    if (newer == null || busy || locked) {
+      checkCalendar();
+      return;
+    }
+    engine = GameEngine(newer);
+    FoodCountry.chosen = state.settings.foodCountry;
+    _syncShown();
+    checkCalendar();
+    notifyListeners();
+  }
+
+  /// A day closed by itself (left open past midnight), waiting to be shown at camp.
+  DayResult? overnight;
+
+  /// Closes yesterday's day if it was left open (see [GameEngine.closeStaleDay]).
+  void checkCalendar() {
+    if (busy || locked) return;
+    final r = engine.closeStaleDay(DateTime.now());
+    if (r == null) return;
+    overnight = r;
+    lastSwing = null;
+    _syncShown();
+    _save();
+    if (r.raidDamage > 0) friends?.addRaidDamage(r.raidDamage);
+    friends?.updateMyHero(heroCardFor(state));
+    notifyListeners();
+  }
+
+  /// Hands the overnight result to camp once, to show.
+  DayResult? takeOvernight() {
+    final r = overnight;
+    overnight = null;
+    return r;
+  }
+
+  /// Sends a waiting cloud save now (the app is being hidden).
+  Future<void> flushSave() => storage.flush();
 
   // ---- actions ----
 

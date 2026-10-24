@@ -210,8 +210,6 @@ class _AddFriendState extends State<_AddFriend> {
           ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_error!, style: Txt.body(size: 14, color: Palette.blood))),
           if (_ok != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(_ok!, style: Txt.body(size: 14, color: Palette.good))),
-          const SizedBox(height: 4),
-          Text('In this prototype, try wren, isolde, gareth or cedric.', style: Txt.body(size: 13, color: Palette.inkSoft, italic: true)),
           const Divider(color: Palette.parchLine, height: 18),
           Row(
             children: [

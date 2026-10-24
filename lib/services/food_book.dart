@@ -2,9 +2,12 @@
 // The matching rules are ported from The Calorie Card's FoodHistory and Usuals; the data lives on
 // this device per account until Firestore is connected (then it maps onto user_food and recipes).
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'cloud_save.dart';
 
 import '../game/catalog.dart';
 import '../game/models.dart';
@@ -277,10 +280,15 @@ String mealForHour(int hour) {
 const meals = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
 
 class FoodBook {
-  FoodBook({required this.accountId});
+  FoodBook({required this.accountId, this.cloud});
   final String accountId;
 
+  /// Real accounts keep their recent foods and recipes in the cloud too, for every device.
+  final CloudSave? cloud;
+
   String get _key => 'calorieknight.foodbook.v1.$accountId';
+  String get _atKey => '$_key.at';
+  Timer? _push;
 
   /// Every food logged in the last [days] days, newest first.
   final List<FoodItem> history = [];
@@ -293,7 +301,17 @@ class FoodBook {
     if (loaded) return;
     try {
       final p = await SharedPreferences.getInstance();
-      final raw = p.getString(_key);
+      var raw = p.getString(_key);
+      final at = p.getInt(_atKey) ?? 0;
+      // The newer of this device's book and the cloud's.
+      final remote = await cloud?.fetch();
+      if (remote != null && (raw == null || remote.at > at)) {
+        raw = remote.json;
+        await p.setString(_key, raw);
+        await p.setInt(_atKey, remote.at);
+      } else if (raw != null && cloud != null && (remote == null || at > remote.at)) {
+        unawaited(cloud!.put((at: at == 0 ? DateTime.now().millisecondsSinceEpoch : at, json: raw)));
+      }
       if (raw != null) {
         final j = (jsonDecode(raw) as Map).cast<String, dynamic>();
         history.addAll([for (final i in (j['history'] as List? ?? [])) FoodItem.fromJson((i as Map).cast<String, dynamic>())]);
@@ -319,8 +337,15 @@ class FoodBook {
 
   Future<void> _save() async {
     try {
+      final raw = jsonEncode({'history': history.map((i) => i.toJson()).toList(), 'recipes': recipes.map((r) => r.toJson()).toList()});
+      final at = DateTime.now().millisecondsSinceEpoch;
       final p = await SharedPreferences.getInstance();
-      await p.setString(_key, jsonEncode({'history': history.map((i) => i.toJson()).toList(), 'recipes': recipes.map((r) => r.toJson()).toList()}));
+      await p.setString(_key, raw);
+      await p.setInt(_atKey, at);
+      if (cloud != null) {
+        _push?.cancel();
+        _push = Timer(const Duration(seconds: 2), () => unawaited(cloud!.put((at: at, json: raw))));
+      }
     } catch (_) {}
   }
 

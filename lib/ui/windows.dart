@@ -109,6 +109,18 @@ Future<DayResult?> restAtInn(BuildContext context, GameController c) async {
   return r;
 }
 
+/// A day that closed by itself overnight (the hero went to bed without visiting the Inn): its
+/// verdict, shown when camp next opens.
+Future<void> showOvernightVerdict(BuildContext context, GameController c, DayResult r) async {
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _VerdictWindow(result: r, nextDay: c.state.day, overnight: true),
+  );
+  c.wake(r, animate: false);
+  if (r.showSquire && context.mounted) await showSquireWindow(context);
+}
+
 Future<void> showSquireWindow(BuildContext context) => showDialog<void>(context: context, builder: (_) => const _SquireWindow());
 
 class _InnScene extends StatefulWidget {
@@ -233,9 +245,12 @@ class _InnPainter extends CustomPainter {
 }
 
 class _VerdictWindow extends StatelessWidget {
-  const _VerdictWindow({required this.result, required this.nextDay});
+  const _VerdictWindow({required this.result, required this.nextDay, this.overnight = false});
   final DayResult result;
   final int nextDay;
+
+  /// Closed by itself after midnight rather than at the Inn.
+  final bool overnight;
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +268,10 @@ class _VerdictWindow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (overnight) ...[
+              Text('You didn\'t stop at the Inn last night, so the innkeeper closed the day for you.', style: Txt.body(size: 13.5, color: Palette.inkSoft)),
+              const SizedBox(height: 6),
+            ],
             Text(v.title, style: Txt.inkLabel(size: 26, color: titleColour)),
             const SizedBox(height: 2),
             Text(

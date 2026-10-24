@@ -1,5 +1,9 @@
 // The adventure: opens when a meal is logged (or the morning brings a finishing blow) and plays
-// the fight on a large stage. The merchant pops up after every victory.
+// the fight on a large stage. The merchant pops up after every victory. Once everything has played
+// out it goes back to camp by itself with a one-line result, unless the player taps the fight to
+// stay and watch.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -21,8 +25,12 @@ import 'theme.dart';
 import 'rations_page.dart' show chooseRations;
 
 class BattleScreen extends StatefulWidget {
-  const BattleScreen({super.key, required this.controller, required this.start});
+  const BattleScreen({super.key, required this.controller, required this.start, this.autoReturn = true});
   final GameController controller;
+
+  /// Head back to camp once the fight has played out (a strike, the morning's blow). Off for the
+  /// sample day and for a quest or ambush foe walking in, where there's nothing to come back from.
+  final bool autoReturn;
 
   /// What to play once the stage is listening: a swing, the morning's blow, or a sample day.
   final void Function(GameController) start;
@@ -35,18 +43,87 @@ class _BattleScreenState extends State<BattleScreen> {
   GameController get c => widget.controller;
   bool _merchantOpen = false;
 
+  /// The player tapped the fight (or chose to log more here): no going back by itself.
+  bool _stay = false;
+  final _opened = Stopwatch();
+  Timer? _leave;
+
+  /// The last strike before this screen opened, so the result only counts strikes made here.
+  SwingResult? _swingBefore;
+
   @override
   void initState() {
     super.initState();
     c.addListener(_watch);
+    _opened.start();
+    _swingBefore = c.lastSwing; // before the strike starts
     // The stage subscribes during the first build; start once it is listening.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.start(c);
+      _maybeLeave();
     });
+  }
+
+  /// Whether everything has played out: no strike or combo running, no spoils, merchant or quest
+  /// waiting.
+  bool get _settled => !c.locked && c.comboLeft == 0 && !c.merchantDue && !_merchantOpen;
+
+  /// Once settled (and after the blow has had time to land), back to camp with the result.
+  void _maybeLeave() {
+    if (!widget.autoReturn || _stay || !mounted) return;
+    if (!_settled) {
+      _leave?.cancel();
+      _leave = null;
+      return;
+    }
+    if (_leave != null) return;
+    // A short beat so the last hit (and the foe's turn) reads, and at least ~2s on screen in all.
+    final wait = Duration(milliseconds: (2200 - _opened.elapsedMilliseconds).clamp(900, 2200));
+    _leave = Timer(wait, () {
+      _leave = null;
+      if (!mounted || _stay || !_settled) return;
+      // Only leave from the fight itself, not from under a window: try again once it's closed.
+      if (!(ModalRoute.of(context)?.isCurrent ?? false)) {
+        _leave = Timer(const Duration(seconds: 1), () {
+          _leave = null;
+          _maybeLeave();
+        });
+        return;
+      }
+      Navigator.of(context).pop(_result());
+    });
+  }
+
+  void _stayHere() {
+    if (_stay || !widget.autoReturn) return;
+    _leave?.cancel();
+    _leave = null;
+    setState(() => _stay = true);
+  }
+
+  /// One line for camp: "Goblin Scout defeated! +55 XP" or "34 damage to the Goblin Scout · 57 / 91 HP left".
+  String? _result() {
+    if (identical(c.lastSwing, _swingBefore)) return null; // nothing struck here (the morning's blow)
+    final rs = c.comboResults.isNotEmpty ? c.comboResults : [if (c.lastSwing != null) c.lastSwing!];
+    if (rs.isEmpty) return null;
+    var dmg = 0;
+    for (final r in rs) {
+      if (!r.miss) dmg += r.damage.base + r.damage.effects;
+      dmg += r.damage.chip + r.summonHit + r.offhandHit + r.riposte + r.chargeHit;
+    }
+    final kills = [for (final r in rs) if (r.kill != null) r.kill!];
+    final strikes = rs.length == 1 ? '' : '${rs.length} strikes · ';
+    if (kills.isNotEmpty) {
+      final k = kills.last;
+      return '$strikes${kills.length == 1 ? '${k.name} defeated!' : '${kills.length} foes defeated!'} +${fmt(kills.fold<int>(0, (a, k) => a + k.xp))} XP';
+    }
+    final foe = c.shownFoeType;
+    return '$strikes${fmt(dmg)} damage to ${foe.boss || foe.named ? '' : 'the '}${foe.name} · ${fmt(c.shownFoeHp)} / ${fmt(c.shownFoeMax)} HP left';
   }
 
   @override
   void dispose() {
+    _leave?.cancel();
     c.removeListener(_watch);
     // Left mid-combo: the remaining foods are still logged (and strike), just without the show.
     final game = c;
@@ -55,6 +132,7 @@ class _BattleScreenState extends State<BattleScreen> {
   }
 
   Future<void> _watch() async {
+    _maybeLeave();
     if (!c.merchantDue || !mounted) return;
     if (_merchantOpen) {
       // Already showing spoils or wares for an earlier victory; the open window covers this one.
@@ -81,11 +159,15 @@ class _BattleScreenState extends State<BattleScreen> {
       c.ambushArrives();
     }
     _merchantOpen = false;
+    // A quest foe walking in is worth staying for: log food at it from here.
+    if (walkedIn) _stayHere();
     // A combo paused at this victory carries on now (onto the quest foe, once it has walked in).
     if (!walkedIn) c.resumeCombo();
+    _maybeLeave();
   }
 
   Future<void> _logAnother() async {
+    _stayHere();
     final foods = await chooseRations(context, c);
     if (foods == null || !mounted) return;
     final correction = c.state.corrections >= foods.length;
@@ -188,39 +270,44 @@ class _BattleScreenState extends State<BattleScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Stone(
-                                  padding: const EdgeInsets.all(3),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: Stack(
-                                      children: [
-                                        BattleStage(controller: c, aspectRatio: wide ? 16 / 9 : 700 / 540),
-                                        Positioned(left: 10, top: 8, right: 150, child: StatusBadges(state: s)),
-                                        Positioned(
-                                          right: 10,
-                                          top: 8,
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 220),
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                Text(
-                                                  foe.name,
-                                                  textAlign: TextAlign.right,
-                                                  style: Txt.label(size: 15, color: foe.aura != null ? Color(foe.aura!.argb) : (foe.boss ? Palette.amber : Palette.cream), weight: FontWeight.w800),
-                                                ),
-                                                if (foe.aura != null) Text(foe.quest != null ? 'Quest foe' : (foe.named ? 'Rare boss · ${foe.aura!.label}' : 'Rare foe'), style: Txt.label(size: 12, color: Color(foe.aura!.argb))),
-                                                Text('Level ${reward.level} · ${fmt(c.shownFoeHp)} / ${fmt(c.shownFoeMax)} HP', style: Txt.onStone(size: 12)),
-                                              ],
+                                // Tapping the fight keeps you here instead of heading back to camp.
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _stayHere,
+                                  child: Stone(
+                                    padding: const EdgeInsets.all(3),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(2),
+                                      child: Stack(
+                                        children: [
+                                          BattleStage(controller: c, aspectRatio: wide ? 16 / 9 : 700 / 540),
+                                          Positioned(left: 10, top: 8, right: 150, child: StatusBadges(state: s)),
+                                          Positioned(
+                                            right: 10,
+                                            top: 8,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 220),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    foe.name,
+                                                    textAlign: TextAlign.right,
+                                                    style: Txt.label(size: 15, color: foe.aura != null ? Color(foe.aura!.argb) : (foe.boss ? Palette.amber : Palette.cream), weight: FontWeight.w800),
+                                                  ),
+                                                  if (foe.aura != null) Text(foe.quest != null ? 'Quest foe' : (foe.named ? 'Rare boss · ${foe.aura!.label}' : 'Rare foe'), style: Txt.label(size: 12, color: Color(foe.aura!.argb))),
+                                                  Text('Level ${reward.level} · ${fmt(c.shownFoeHp)} / ${fmt(c.shownFoeMax)} HP', style: Txt.onStone(size: 12)),
+                                                ],
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                        Positioned(
-                                          left: 10,
-                                          bottom: 6,
-                                          child: Text(realms[realmOf(c.shownFoe)], style: Txt.label(size: 13, color: Palette.parch)),
-                                        ),
-                                      ],
+                                          Positioned(
+                                            left: 10,
+                                            bottom: 6,
+                                            child: Text(realms[realmOf(c.shownFoe)], style: Txt.label(size: 13, color: Palette.parch)),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -262,13 +349,47 @@ class _BattleScreenState extends State<BattleScreen> {
                                       else
                                         Text(
                                           n >= fullSwingsPerDay
-                                              ? 'Full-strength swings used for today. Rest at the Inn to land the finishing blow.'
+                                              ? (c.shownFoeHp > 0 ? 'Full-strength swings used for today. Rest at the Inn to land the finishing blow.' : 'Full-strength swings used for today. Food you log still counts toward your stamina.')
                                               : '${fullSwingsPerDay - n} full-strength swings left today · ${fmt(totals(s.logs).kcal)} / ${fmt(s.settings.allowance)} stamina',
                                           style: Txt.body(size: 14, color: Palette.inkSoft),
                                         ),
+                                      if (widget.autoReturn && !c.sampleRunning) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _stay ? 'Staying to watch. Tap Done when you\'re ready.' : 'Back to camp when the fight\'s done · tap the fight to stay',
+                                          style: Txt.body(size: 12.5, italic: true, color: Palette.inkSoft),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
+                                // Phones have room under the fight: what happened just before.
+                                if (!wide && s.journal.length > 1) ...[
+                                  const SizedBox(height: 10),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    child: Text('Earlier', style: Txt.label(size: 13, color: Palette.parch2)),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  for (final e in s.journal.reversed.skip(1).take(5))
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(4, 3, 4, 3),
+                                      child: Text(
+                                        e.text,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Txt.onStone(
+                                          size: 13,
+                                          color: switch (e.kind) {
+                                            EntryKind.damage => const Color(0xFFE08A7A),
+                                            EntryKind.gold => Palette.amber,
+                                            EntryKind.good => const Color(0xFF9BE27A),
+                                            _ => Palette.parch2,
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ],
                             ),
                           ),

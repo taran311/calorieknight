@@ -110,6 +110,23 @@ void main() {
     expect(back.logs.length, e.state.logs.length);
     expect(back.knight.dragonXp, 120);
     expect(back.foeMax, e.state.foeMax);
+    expect(back.dayDate, e.state.dayDate);
+  });
+
+  test('a day left open past midnight closes by itself, and an empty day never does', () {
+    final e = GameEngine(GameEngine.newGame(), random: Random(3));
+    final now = DateTime.now();
+    expect(e.closeStaleDay(now) == null, isTrue); // nothing logged
+    logSampleDay(e);
+    expect(e.state.dayDate, GameEngine.dateKey(now));
+    expect(e.closeStaleDay(now) == null, isTrue); // still today
+    final day = e.state.day;
+    final r = e.closeStaleDay(now.add(const Duration(days: 1)));
+    expect(r != null, isTrue);
+    expect(e.state.day, day + 1);
+    expect(e.state.logs.isEmpty, isTrue);
+    expect(e.state.dayDate == null, isTrue);
+    expect(e.closeStaleDay(now.add(const Duration(days: 2))) == null, isTrue);
   });
 }
 

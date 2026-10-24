@@ -32,9 +32,19 @@ import 'theme.dart';
 import 'windows.dart';
 import 'world_boss_page.dart';
 
-/// Opens the battle screen and runs [start] once the stage is listening.
-Future<void> openBattle(BuildContext context, GameController c, void Function(GameController) start) =>
-    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(builder: (_) => BattleScreen(controller: c, start: start)));
+/// Opens the battle screen and runs [start] once the stage is listening. With [autoReturn] it comes
+/// back by itself once the fight has played out, and the result shows at camp for a moment.
+Future<void> openBattle(BuildContext context, GameController c, void Function(GameController) start, {bool autoReturn = true}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final result = await Navigator.of(context, rootNavigator: true).push<String>(
+    MaterialPageRoute<String>(builder: (_) => BattleScreen(controller: c, start: start, autoReturn: autoReturn)),
+  );
+  if (result != null && result.isNotEmpty) {
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(result), duration: const Duration(seconds: 4)));
+  }
+}
 
 /// Log a meal, then watch the strike. [initialText] is looked up as the page opens; [items] are
 /// already chosen.
@@ -162,9 +172,23 @@ class _CampPageState extends State<CampPage> {
     _touring = false;
   }
 
+  bool _showingOvernight = false;
+
+  /// Yesterday closed by itself: show its verdict once.
+  void _maybeOvernight() {
+    if (_showingOvernight || c.overnight == null || c.locked) return;
+    _showingOvernight = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final r = c.takeOvernight();
+      if (r != null && mounted) await showOvernightVerdict(context, c, r);
+      _showingOvernight = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     _maybeTour();
+    _maybeOvernight();
     final s = c.state, t = totals(s.logs), a = s.settings.allowance;
     final again = c.foodBook.rankForMeal(_meal, limit: 3);
     return SingleChildScrollView(
@@ -252,7 +276,7 @@ class _CampPageState extends State<CampPage> {
                 children: [
                   _FooterLink(icon: Icons.history_edu, label: 'Battle log', onTap: () => _showBattleLog(context)),
                   _FooterLink(icon: Icons.help_outline, label: 'How it works', onTap: _tour),
-                  if (s.logs.isEmpty) _FooterLink(icon: Icons.play_circle_outline, label: 'Watch a sample day', onTap: c.locked ? null : () => openBattle(context, c, (c) => c.playSampleDay())),
+                  if (s.logs.isEmpty) _FooterLink(icon: Icons.play_circle_outline, label: 'Watch a sample day', onTap: c.locked ? null : () => openBattle(context, c, (c) => c.playSampleDay(), autoReturn: false)),
                 ],
               ),
             ],
@@ -990,7 +1014,7 @@ class _AdventureInboxState extends State<AdventureInbox> {
           onAction: locked
               ? null
               : () async {
-                  if (await showQuestOffer(context, c) && context.mounted) await openBattle(context, c, (c) => c.acceptQuest());
+                  if (await showQuestOffer(context, c) && context.mounted) await openBattle(context, c, (c) => c.acceptQuest(), autoReturn: false);
                 },
         ),
       if (s.opportunity != null)
@@ -1003,7 +1027,7 @@ class _AdventureInboxState extends State<AdventureInbox> {
           onAction: locked
               ? null
               : () async {
-                  if (await showOpportunity(context, c) && context.mounted) await openBattle(context, c, (c) => c.ambushArrives());
+                  if (await showOpportunity(context, c) && context.mounted) await openBattle(context, c, (c) => c.ambushArrives(), autoReturn: false);
                 },
         ),
       _Note(
@@ -1022,7 +1046,9 @@ class _AdventureInboxState extends State<AdventureInbox> {
           'inn',
           icon: Icons.bed_outlined,
           title: 'Rest at the Inn',
-          body: s.strikes >= fullSwingsPerDay ? 'Full swings used. Close the day when you\'re done eating.' : 'Close the day when you\'re done eating. The night road opens after.',
+          body: s.strikes >= fullSwingsPerDay
+              ? 'Full swings used. Close the day when you\'re done eating (it closes itself at midnight if you forget).'
+              : 'Close the day when you\'re done eating. The night road opens after. Forget, and it closes itself at midnight.',
           action: 'Close the day',
           onAction: locked ? null : () => restFlow(context, c),
           dismissible: false,

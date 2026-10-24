@@ -58,6 +58,12 @@ class FirestoreCalorieCardLink implements CalorieCardLink {
   @override
   bool get available => true;
 
+  /// "heinz baked beans" -> "Heinz baked beans" (The Calorie Card keeps names as typed).
+  static String _capitalise(String s) {
+    final t = s.trim();
+    return t.isEmpty ? 'Food' : '${t[0].toUpperCase()}${t.substring(1)}';
+  }
+
   static double? _n(Object? v) {
     final d = v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
     return d != null && d.isFinite ? d : null;
@@ -164,7 +170,7 @@ class FirestoreCalorieCardLink implements CalorieCardLink {
         foods.add(
           CardFood(
             id: d.id,
-            name: '${e['food_description'] ?? 'Food'}',
+            name: _capitalise('${e['food_description'] ?? 'Food'}'),
             portion: '${e['food_portion'] ?? ''}',
             kcal: _n(e['food_calories']) ?? 0,
             protein: _n(e['food_protein']) ?? 0,

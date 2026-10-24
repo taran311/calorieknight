@@ -361,7 +361,9 @@ class _Sidebar extends StatelessWidget {
               children: [
                 const SizedBox(width: 26, height: 32, child: CustomPaint(painter: CrestPainter())),
                 const SizedBox(width: 10),
-                Expanded(child: Text('CalorieKnight', style: Txt.logo().copyWith(fontSize: 19))),
+                Expanded(
+                  child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text('CalorieKnight', maxLines: 1, style: Txt.logo().copyWith(fontSize: 19))),
+                ),
               ],
             ),
           ),

@@ -1255,9 +1255,12 @@ class _ScenePainter extends CustomPainter {
       }
       if (aura != null) {
         canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x0 - 2.5, top - 2.5, w + 5, 14), const Radius.circular(3.5)), strokePaint(auraColour(aura), 1.6));
-        final label = s._foe.named || s._foe.quest != null || s._foe.pack ? s._foe.name : '★ ${aura.label}';
-        final tp = TextPainter(text: TextSpan(text: label, style: Txt.label(size: 14, color: auraColour(aura), weight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
-        tp.paint(canvas, Offset(fx0 - tp.width / 2, top - 20));
+        // Named, quest and pack foes already have their full name in the corner above the stage, and
+        // a long name here ran into it on phones; a plain rare just gets its short aura tag.
+        if (!(s._foe.named || s._foe.quest != null || s._foe.pack)) {
+          final tp = TextPainter(text: TextSpan(text: '★ ${aura.label}', style: Txt.label(size: 14, color: auraColour(aura), weight: FontWeight.w800)), textDirection: TextDirection.ltr)..layout();
+          tp.paint(canvas, Offset(fx0 - tp.width / 2, top - 20));
+        }
       }
     }
 

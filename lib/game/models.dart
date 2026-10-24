@@ -478,6 +478,7 @@ class GameState {
     this.fairyNext = 0,
     this.aidDay = -1,
     this.nightDay = -1,
+    this.dayDate,
     List<String>? cardTaken,
     this.nightDoneDay = -1,
     Map<String, int>? deedCounts,
@@ -563,6 +564,10 @@ class GameState {
   /// it was last walked. Once a night.
   int nightDay, nightDoneDay;
 
+  /// The calendar date ('2026-10-24') the current day's first food was logged. A day still open on
+  /// a later date closes by itself when the game next opens.
+  String? dayDate;
+
   /// Calorie Card food already struck with here (its entry ids), so nothing strikes twice.
   final List<String> cardTaken;
 
@@ -646,6 +651,7 @@ class GameState {
     if (fairyNext > 0) 'fairyNext': fairyNext,
     if (aidDay >= 0) 'aid': aidDay,
     if (nightDay >= 0) 'night': nightDay,
+    if (dayDate != null) 'dayDate': dayDate,
     if (nightDoneDay >= 0) 'nightDone': nightDoneDay,
     if (cardTaken.isNotEmpty) 'cardTaken': cardTaken,
     if (deedCounts.isNotEmpty) 'deedCounts': deedCounts,
@@ -712,6 +718,7 @@ class GameState {
       fairyNext: (j['fairyNext'] as num?)?.toInt() ?? 0,
       aidDay: (j['aid'] as num?)?.toInt() ?? -1,
       nightDay: (j['night'] as num?)?.toInt() ?? -1,
+      dayDate: j['dayDate'] as String?,
       nightDoneDay: (j['nightDone'] as num?)?.toInt() ?? -1,
       cardTaken: [for (final x in (j['cardTaken'] as List?) ?? const []) '$x'],
       deedCounts: {for (final e in ((j['deedCounts'] as Map?) ?? {}).entries) e.key as String: (e.value as num).toInt()},

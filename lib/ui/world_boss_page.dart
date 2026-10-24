@@ -105,7 +105,7 @@ Future<void> claimWorldBossFlow(BuildContext context, GameController c) async {
   if (r == null) return;
   final (kill, chest) = r;
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('${kill.name} has fallen! +${kill.xp} XP, +${kill.coins} gold, and a ${chest.tier.label.toLowerCase()} (${chest.summary}).')),
+    SnackBar(content: Text('${kill.name} has fallen! +${kill.xp} XP, +${kill.coins} gold, and ${withArticle(chest.tier.label.toLowerCase())} (${chest.summary}).')),
   );
   await resolvePendingLoot(context, c, title: 'World Boss spoils');
 }

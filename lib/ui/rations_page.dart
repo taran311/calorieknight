@@ -639,7 +639,9 @@ class _RationsPageState extends State<RationsPage> {
       onPressed = _lookUp;
     } else if (n > 0) {
       title = '${verb[0].toUpperCase()}${verb.substring(1)} with $n ${n == 1 ? 'food' : 'foods'}';
-      caption = '+${formatStamina(total.round())} stamina · $_meal${n == 1 ? '' : ' · one strike each'}';
+      // Calorie Card foods keep the meal they were logged under there.
+      final mealNote = _ready.every((i) => i.source == 'calorie_card') ? 'as on your Calorie Card' : _meal;
+      caption = '+${formatStamina(total.round())} stamina · $mealNote${n == 1 ? '' : ' · one strike each'}';
       onPressed = _strike;
     } else {
       title = 'Add food to $verb';

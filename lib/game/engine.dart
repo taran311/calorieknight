@@ -403,7 +403,7 @@ class GameEngine {
     if (bonePrize != null) _note('Among the bones: ${bonePrize.name.toLowerCase()}!', EntryKind.gold);
     if (collar != null) _note('${f.name} leaves something behind: ${collar.name}!', EntryKind.gold);
     if (pup) _note('A hellhound pup crawls out of the embers and follows you. Make it your companion under Kit & spells at camp.', EntryKind.gold);
-    if (rune != null) _note('Among the Warden\'s bones, runes glow: a ${rune.name}!', EntryKind.gold);
+    if (rune != null) _note('Among the Warden\'s bones, runes glow: ${withArticle(rune.name)}!', EntryKind.gold);
     if (entPrize != null) _note('The ent leaves you a gift: ${entPrize.name}!', EntryKind.gold);
     if (acorn != null) _note('An acorn falls from the old ent\'s crown: the ${acorn.name}!', EntryKind.gold);
     if (ups > 0) _note('You reached level ${k.level}.', EntryKind.gold);
@@ -411,7 +411,7 @@ class GameEngine {
     if (next != null) {
       _note(
         next.pack
-            ? 'Three at once: a ${next.name.toLowerCase()} surrounds you! Sweeping weapons, area spells, special arrows and special attacks hit them all (+50%).'
+            ? 'Three at once: ${withArticle(next.name.toLowerCase())} surrounds you! Sweeping weapons, area spells, special arrows and special attacks hit them all (+50%).'
             : next.hound
             ? 'The ground cracks and smoke pours out: ${next.name} has come to avenge its master!'
             : next.look == 'gargoyle'
@@ -632,7 +632,7 @@ class GameEngine {
       _note('At the bottom of the chest: a Scroll of the Fae. A fairy steps out of its light and joins you! Bring it along under Kit & spells.', EntryKind.gold);
     }
     final find = ChestFind(tier, coins, items, potion: potion, ammo: ammo == null ? null : '$ammoBundle ${ammo.label(missileFor(k.loadouts[HeroClass.ranger]!.weapon?.art)).toLowerCase()}');
-    _note('You open a ${tier.label.toLowerCase()}: ${find.summary}.', EntryKind.gold);
+    _note('You open ${withArticle(tier.label.toLowerCase())}: ${find.summary}.', EntryKind.gold);
     return find;
   }
 
@@ -682,6 +682,7 @@ class GameEngine {
   /// removed, the next log is a correction instead: added with no strike.
   SwingResult logMeal(List<LoggedFood> foods) {
     assert(foods.isNotEmpty);
+    if (state.logs.isEmpty) state.dayDate = dateKey(DateTime.now());
     if (state.corrections > 0) {
       state.corrections--;
       state.logs.addAll(foods);
@@ -1195,7 +1196,7 @@ class GameEngine {
     final mount = id.startsWith('mount:') ? mountById(id.substring(6)) : null;
     if (mount != null) {
       _gainMount(mount.id);
-      _note('You buy a ${mount.name.toLowerCase()} for $price gold. Your first strike each day opens with a charge.', EntryKind.gold);
+      _note('You buy ${withArticle(mount.name.toLowerCase())} for $price gold. Your first strike each day opens with a charge.', EntryKind.gold);
       return true;
     }
     switch (id) {
@@ -1326,7 +1327,7 @@ class GameEngine {
         return LoginClaim(slot, gift, count: n);
       case LoginGift.chest:
         final c = openChest();
-        _note('Daily gift: a ${c.tier.name} chest! ${c.coins} gold${c.items.isEmpty ? '' : ' and ${c.items.map((g) => g.name).join(', ')}'}.', EntryKind.gold);
+        _note('Daily gift: ${withArticle(c.tier.name)} chest! ${c.coins} gold${c.items.isEmpty ? '' : ' and ${c.items.map((g) => g.name).join(', ')}'}.', EntryKind.gold);
         return LoginClaim(slot, gift, chest: c);
     }
   }
@@ -1445,6 +1446,27 @@ class GameEngine {
 
   // ---------------- the Inn ----------------
 
+  /// A calendar date as a key: '2026-10-24'.
+  static String dateKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Days follow the calendar: a day with food logged that is still open on a later date is closed
+  /// at the Inn now, as if the hero had rested that night. Returns its result, or null if today's
+  /// day is still going (or nothing was logged).
+  DayResult? closeStaleDay(DateTime now) {
+    if (state.logs.isEmpty) {
+      state.dayDate = null;
+      return null;
+    }
+    final today = dateKey(now), started = state.dayDate;
+    if (started == null) {
+      state.dayDate = today; // a save from before dates were kept: today it is
+      return null;
+    }
+    if (started == today) return null;
+    final when = DateTime.tryParse(started);
+    return rest(now: when == null ? now : DateTime(when.year, when.month, when.day, 22));
+  }
+
   /// Rest at the Inn: judge the day, apply it, and start the next.
   DayResult rest({DateTime? now}) {
     final k = state.knight, v = computeVerdict(state), r = DayResult(state.day, v);
@@ -1547,6 +1569,7 @@ class GameEngine {
     // A day logged and closed opens tonight's road.
     if (logged) state.nightDay = state.day;
     state.logs = [];
+    state.dayDate = null;
     state.strikes = 0;
     state.corrections = 0;
     return r;

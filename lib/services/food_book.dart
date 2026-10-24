@@ -303,14 +303,19 @@ class FoodBook {
       final p = await SharedPreferences.getInstance();
       var raw = p.getString(_key);
       final at = p.getInt(_atKey) ?? 0;
-      // The newer of this device's book and the cloud's.
-      final remote = await cloud?.fetch();
-      if (remote != null && (raw == null || remote.at > at)) {
+      // The newer of this device's book and the cloud's. A book from before timestamps (at 0) is
+      // judged by size, and an unreachable cloud is left alone rather than overwritten.
+      final got = await cloud?.fetch();
+      final remote = got?.save;
+      final takeRemote = remote != null && (raw == null || (at == 0 ? remote.json.length > raw.length : remote.at > at));
+      if (takeRemote) {
         raw = remote.json;
         await p.setString(_key, raw);
         await p.setInt(_atKey, remote.at);
-      } else if (raw != null && cloud != null && (remote == null || at > remote.at)) {
-        unawaited(cloud!.put((at: at == 0 ? DateTime.now().millisecondsSinceEpoch : at, json: raw)));
+      } else if (got != null && got.ok && raw != null && raw != remote?.json) {
+        final stamp = at > (remote?.at ?? 0) ? at : DateTime.now().millisecondsSinceEpoch;
+        await p.setInt(_atKey, stamp);
+        unawaited(cloud!.put((at: stamp, json: raw)));
       }
       if (raw != null) {
         final j = (jsonDecode(raw) as Map).cast<String, dynamic>();

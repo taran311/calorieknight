@@ -141,7 +141,7 @@ class GameController extends ChangeNotifier {
   /// that save. Skipped mid-fight.
   Future<void> syncFromCloud() async {
     if (!loaded || busy || locked) return;
-    final newer = await storage.newerInCloud();
+    final newer = await storage.newerInCloud(state);
     if (newer == null || busy || locked) {
       checkCalendar();
       return;

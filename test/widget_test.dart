@@ -22,6 +22,7 @@ import 'package:calorieknight/services/food_book.dart';
 import 'package:calorieknight/services/food_resolver.dart';
 import 'package:calorieknight/services/food_tags.dart';
 import 'package:calorieknight/services/goal_maths.dart';
+import 'package:calorieknight/services/storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 LoggedFood food(String name) => LoggedFood.of(sampleFoods.firstWhere((f) => f.name == name));
@@ -111,6 +112,28 @@ void main() {
     expect(back.knight.dragonXp, 120);
     expect(back.foeMax, e.state.foeMax);
     expect(back.dayDate, e.state.dayDate);
+  });
+
+  test('a fresh save never replaces a hero with progress, from either side', () {
+    final fresh = GameEngine.newGame();
+    final e = GameEngine(GameEngine.newGame(), random: Random(5));
+    logSampleDay(e);
+    e.rest();
+    final played = e.state;
+    expect(isFreshSave(fresh), isTrue);
+    expect(isFreshSave(played), isFalse);
+    // A new device's fresh game reaches the cloud first: the old device keeps its hero, even with
+    // an older or missing timestamp.
+    expect(keepLocal(played, 0, fresh, 999), isTrue);
+    expect(keepLocal(played, 100, fresh, 999), isTrue);
+    // ...and the new device takes the hero from the cloud.
+    expect(keepLocal(fresh, 999, played, 100), isFalse);
+    expect(keepLocal(null, 0, played, 100), isFalse);
+    // Two real saves: the newer wins; an unstamped one is judged by progress.
+    expect(keepLocal(played, 200, played, 100), isTrue);
+    expect(keepLocal(played, 100, played, 200), isFalse);
+    expect(keepLocal(played, 0, fresh, 0), isTrue);
+    expect(keepLocal(played, 5, null, 0), isTrue);
   });
 
   test('a day left open past midnight closes by itself, and an empty day never does', () {

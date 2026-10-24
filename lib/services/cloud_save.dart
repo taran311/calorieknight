@@ -10,8 +10,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// A saved game and when it was saved.
 typedef StampedSave = ({int at, String json});
 
+/// What a cloud read found: [ok] false when the cloud couldn't be reached (offline, rules), which
+/// is not the same as "nothing saved there yet" ([ok] true, [save] null).
+typedef CloudFetch = ({bool ok, StampedSave? save});
+
 abstract class CloudSave {
-  Future<StampedSave?> fetch();
+  Future<CloudFetch> fetch();
   Future<bool> put(StampedSave save);
 }
 
@@ -22,16 +26,16 @@ class FirestoreCloudSave implements CloudSave {
   DocumentReference<Map<String, dynamic>> get _doc => FirebaseFirestore.instance.collection(collection).doc(uid);
 
   @override
-  Future<StampedSave?> fetch() async {
+  Future<CloudFetch> fetch() async {
     try {
       final snap = await _doc.get();
       final d = snap.data();
-      if (!snap.exists || d == null) return null;
+      if (!snap.exists || d == null) return (ok: true, save: null);
       final at = d['at'], json = d['save'];
-      if (at is! num || json is! String || json.isEmpty) return null;
-      return (at: at.toInt(), json: json);
+      if (at is! num || json is! String || json.isEmpty) return (ok: true, save: null);
+      return (ok: true, save: (at: at.toInt(), json: json));
     } catch (_) {
-      return null; // offline, or the rules aren't in yet: play on the device copy
+      return (ok: false, save: null); // offline, or the rules aren't in: play on the device copy
     }
   }
 
